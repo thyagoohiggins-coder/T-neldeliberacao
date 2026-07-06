@@ -36,7 +36,15 @@ para enviar no **WhatsApp**. Versão inicial: **0.1**.
 ## Como gerar o APK (release automática)
 
 O APK é compilado e publicado **automaticamente** pelo GitHub Actions
-(`.github/workflows/release.yml`) quando você cria uma **tag** começando com `v`.
+(`.github/workflows/release.yml`) em dois casos:
+
+- **A cada push na branch de desenvolvimento** (`claude/**`): a release é
+  (re)criada com a versão do arquivo **`VERSION`** (hoje `0.1`). Prático para já
+  ter o APK sem precisar de tag.
+- **Ao criar uma tag `v*`** (ex.: `v0.2`): publica aquela versão específica.
+
+Para lançar uma nova versão numerada, edite o arquivo `VERSION` (ou crie uma tag
+`vX.Y`). O nome da versão dentro do app segue esse valor.
 
 ### 1. Cadastrar os Secrets de assinatura (uma única vez)
 

@@ -2,12 +2,14 @@ name: Build e Release APK
 
 on:
   push:
+    branches:
+      - 'claude/**'
     tags:
       - 'v*'
   workflow_dispatch:
     inputs:
       version:
-        description: 'Versão (ex.: 0.1). Sem esse valor, usa 0.0.<run_number>.'
+        description: 'Versão (ex.: 0.1). Sem esse valor, usa o arquivo VERSION.'
         required: false
         default: ''
 
@@ -28,6 +30,8 @@ jobs:
             V="${GITHUB_REF_NAME#v}"
           elif [ -n "${{ github.event.inputs.version }}" ]; then
             V="${{ github.event.inputs.version }}"
+          elif [ -f VERSION ]; then
+            V="$(tr -d ' \t\n\r' < VERSION)"
           else
             V="0.0.${GITHUB_RUN_NUMBER}"
           fi
@@ -50,7 +54,7 @@ jobs:
         run: |
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > release.keystore
-            echo "Keystore restaurada."
+            echo "Keystore restaurada — APK sairá assinado de release."
           else
             echo "AVISO: Secret KEYSTORE_BASE64 ausente — o APK sairá assinado em debug."
           fi
@@ -73,17 +77,9 @@ jobs:
           ls -la *.apk
 
       - name: Publicar Release com o APK
-        if: ${{ github.ref_type == 'tag' }}
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
+          tag_name: v${{ steps.ver.outputs.version }}
           name: Hora a Hora Túnel FAI ${{ steps.ver.outputs.version }}
           files: HoraAHora-TunelFAI-v${{ steps.ver.outputs.version }}.apk
           generate_release_notes: true
-
-      - name: Anexar APK ao run (quando manual)
-        if: ${{ github.ref_type != 'tag' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: HoraAHora-TunelFAI-v${{ steps.ver.outputs.version }}
-          path: HoraAHora-TunelFAI-v${{ steps.ver.outputs.version }}.apk

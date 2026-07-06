@@ -181,12 +181,12 @@ fun TunelApp() {
                         Text("Resumo total", fontWeight = FontWeight.Bold)
                         Spacer(Modifier.width(0.dp))
                         Text(
-                            Formatador.total(registros),
+                            Formatador.total(registros, metas),
                             fontFamily = FontFamily.Monospace,
                             modifier = Modifier.padding(vertical = 8.dp)
                         )
                         Button(
-                            onClick = { enviarWhatsApp(context, Formatador.total(registros)) },
+                            onClick = { enviarWhatsApp(context, Formatador.total(registros, metas)) },
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Icon(Icons.Filled.Send, contentDescription = null)
@@ -387,7 +387,7 @@ private fun GrupoIntervalo(
                     contentAlignment = Alignment.Center
                 ) {
                     val prod = meta.prod.toIntOrNull() ?: 0
-                    Text("Dif: ${Intervalos.metaDe(intervalo) - prod}", fontWeight = FontWeight.Bold)
+                    Text("Dif: ${prod - Intervalos.metaDe(intervalo)}", fontWeight = FontWeight.Bold)
                 }
             }
 

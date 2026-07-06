@@ -39,19 +39,24 @@ object Formatador {
                 .append(" Meta: ").append(meta_)
                 .append(" Prod: ").append(prod)
                 .append(" Aprov: ").append(aprov)
-                .append(" Dif: ").append(meta_ - prod)
+                .append(" Dif: ").append(prod - meta_)   // Produção - Meta: negativo se não bateu a meta
         }
         return sb.toString().trimEnd('\n')
     }
 
     /**
      * Resumo total de todos os intervalos.
-     * TTL é fixo (80). Prod = total de VINs registrados; Aprov = VINs Liberados;
-     * Dif = Meta fixa (TTL) - Produção (pode ser negativo).
+     * TTL é fixo (80). Prod = total de VINs registrados; Aprov = VINs Liberados.
+     * Dif = saldo acumulado: soma de (Produção digitada - Meta) de cada intervalo
+     * presente no app. Pode terminar positivo ou negativo.
      */
-    fun total(todos: List<Registro>): String {
+    fun total(todos: List<Registro>, metas: Map<String, MetaInput>): String {
         val prod = todos.size
         val aprov = todos.count { it.status == Status.LIBERADO }
-        return "TTL: ${Intervalos.META_TOTAL} Prod: $prod Aprov: $aprov Dif: ${Intervalos.META_TOTAL - prod}"
+        val difAcumulada = todos.map { it.intervalo }.distinct().sumOf { intv ->
+            val prodDigitado = paraInt(metas[intv]?.prod ?: "")
+            prodDigitado - Intervalos.metaDe(intv)
+        }
+        return "TTL: ${Intervalos.META_TOTAL} Prod: $prod Aprov: $aprov Dif: $difAcumulada"
     }
 }

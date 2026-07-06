@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- APK baixado para atualização fica no cache externo do app -->
+    <external-cache-path name="apk_cache" path="." />
+    <cache-path name="internal_cache" path="." />
+    <files-path name="files" path="." />
+</paths>

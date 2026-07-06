@@ -20,13 +20,13 @@ para enviar no **WhatsApp**. Versão inicial: **0.1**.
   3. VIN: 95PBSK31DVB105345 Status: Liberado Intervalo: 13:00
   ```
 - **Estatística por intervalo (opcional na mensagem):** você digita **Prod** e
-  **Aprov**, o app calcula **Dif = Prod − Aprov** (pode ser negativa):
+  **Aprov**, o app calcula **Dif = Meta fixa − Produção** (pode ser negativa):
   ```
-  Intervalo: 13:00 Meta: 10 Prod: 4 Aprov: 2 Dif: 2
+  Intervalo: 13:00 Meta: 10 Prod: 4 Aprov: 2 Dif: 6
   ```
   As **metas** são fixas: 06:00=8, 07:00=10, 08:00=8, 09:00=10, 10:00=10,
   11:00=6, 12:00=2, 13:00=10, 14:00=8, 15:00=8 (total **80**).
-- **Resumo total:** `TTL: 80 Prod: <nº de VINs> Aprov: <nº de Liberados> Dif: <Prod−Aprov>`.
+- **Resumo total:** `TTL: 80 Prod: <nº de VINs> Aprov: <nº de Liberados> Dif: <80−Prod>`.
 - **Dados salvos no aparelho** (reaparecem ao reabrir). Botão **Limpar tudo** no
   menu para começar um novo turno.
 - **Atualização automática:** ao abrir e pelo menu *Verificar atualização*, o app

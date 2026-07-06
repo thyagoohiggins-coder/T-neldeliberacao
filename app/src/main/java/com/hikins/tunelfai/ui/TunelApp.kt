@@ -387,8 +387,7 @@ private fun GrupoIntervalo(
                     contentAlignment = Alignment.Center
                 ) {
                     val prod = meta.prod.toIntOrNull() ?: 0
-                    val aprov = meta.aprov.toIntOrNull() ?: 0
-                    Text("Dif: ${prod - aprov}", fontWeight = FontWeight.Bold)
+                    Text("Dif: ${Intervalos.metaDe(intervalo) - prod}", fontWeight = FontWeight.Bold)
                 }
             }
 

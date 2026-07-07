@@ -11,6 +11,8 @@ package com.hikins.tunelfai.model
  * @param destacarNegrito envolve os prefixos (VIN, Status, ...) com "*" p/ negrito no WhatsApp
  * @param retornoAuto ao digitar um VIN já registrado, marca "Negado" e preenche o motivo
  *                    automaticamente com "[Retornou para o túnel de liberação <intervalos>]"
+ * @param vinPrefixoVB pré-preenche o campo VIN com "VB" ao abrir o formulário (o usuário
+ *                     pode apagar/complementar); apenas agiliza a digitação
  */
 data class Configuracao(
     val exigirFoto: Boolean = false,
@@ -19,5 +21,6 @@ data class Configuracao(
     val vibracaoAtivada: Boolean = false,
     val vibracaoSegundos: Int = 3,
     val destacarNegrito: Boolean = true,
-    val retornoAuto: Boolean = false
+    val retornoAuto: Boolean = false,
+    val vinPrefixoVB: Boolean = false
 )

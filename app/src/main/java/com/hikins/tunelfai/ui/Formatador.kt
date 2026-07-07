@@ -101,12 +101,12 @@ object Formatador {
     /**
      * Resumo total de todos os intervalos.
      * TTL é fixo (80). Prod = total de VINs registrados; Aprov = VINs Liberados.
-     * Dif = Meta do dia (80) - Prod: quantos ainda faltam para bater a meta.
+     * Dif = Prod - Meta do dia (80): negativa enquanto faltam veículos p/ a meta.
      */
     fun total(todos: List<Registro>, config: Configuracao): String {
         val prod = todos.size
         val aprov = todos.count { it.status == Status.LIBERADO }
-        val dif = Intervalos.META_TOTAL - prod
+        val dif = prod - Intervalos.META_TOTAL
         return p(config, "TTL") + ": ${Intervalos.META_TOTAL} " +
             p(config, "Prod") + ": $prod " +
             p(config, "Aprov") + ": $aprov " +

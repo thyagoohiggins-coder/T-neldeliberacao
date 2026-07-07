@@ -417,6 +417,7 @@ private fun ConfiguracoesDialog(
     var vibracaoSegundos by remember { mutableStateOf(config.vibracaoSegundos.toString()) }
     var destacarNegrito by remember { mutableStateOf(config.destacarNegrito) }
     var retornoAuto by remember { mutableStateOf(config.retornoAuto) }
+    var vinPrefixoVB by remember { mutableStateOf(config.vinPrefixoVB) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -431,6 +432,7 @@ private fun ConfiguracoesDialog(
                 LinhaSwitch("Escrever o motivo à mão", motivoLivre) { motivoLivre = it }
                 LinhaSwitch("Destacar prefixos em negrito", destacarNegrito) { destacarNegrito = it }
                 LinhaSwitch("VIN repetido: preencher motivo de retorno", retornoAuto) { retornoAuto = it }
+                LinhaSwitch("Iniciar campo VIN com \"VB\"", vinPrefixoVB) { vinPrefixoVB = it }
                 HorizontalDivider(Modifier.padding(vertical = 4.dp))
                 LinhaSwitch("Lembrete + vibração antes do intervalo", vibracaoAtivada) { vibracaoAtivada = it }
                 OutlinedTextField(
@@ -457,7 +459,8 @@ private fun ConfiguracoesDialog(
                         vibracaoAtivada = vibracaoAtivada,
                         vibracaoSegundos = (vibracaoSegundos.toIntOrNull() ?: 3).coerceIn(1, 60),
                         destacarNegrito = destacarNegrito,
-                        retornoAuto = retornoAuto
+                        retornoAuto = retornoAuto,
+                        vinPrefixoVB = vinPrefixoVB
                     )
                 )
             }) { Text("Salvar") }
@@ -486,7 +489,8 @@ private fun FormularioRegistro(
     onAdicionar: (String, Status, Motivo?, String?, String, List<String>) -> Unit
 ) {
     val context = LocalContext.current
-    var vin by remember { mutableStateOf("") }
+    val vinInicial = if (config.vinPrefixoVB) "VB" else ""
+    var vin by remember(config.vinPrefixoVB) { mutableStateOf(vinInicial) }
     var status by remember { mutableStateOf(Status.LIBERADO) }
     var motivoSel by remember { mutableStateOf(Motivo.DEMERITO_ABERTO.texto) }
     var motivoTexto by remember { mutableStateOf("") }
@@ -622,7 +626,7 @@ private fun FormularioRegistro(
                                 Motivo.entries.first { it.texto == motivoSel } else null
                             val mTexto = if (escrever) motivoTexto.trim().ifBlank { null } else null
                             onAdicionar(v, status, mEnum, mTexto, intervalo!!, fotos.toList())
-                            vin = ""
+                            vin = vinInicial
                             motivoTexto = ""
                             motivoSel = Motivo.DEMERITO_ABERTO.texto
                             fotos.clear()

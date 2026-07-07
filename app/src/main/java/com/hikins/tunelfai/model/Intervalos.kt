@@ -27,4 +27,17 @@ object Intervalos {
     const val META_TOTAL: Int = 80
 
     fun metaDe(intervalo: String): Int = metas[intervalo] ?: 0
+
+    /**
+     * Intervalo correspondente à hora informada (ex.: 13 -> "13:00").
+     * Antes do primeiro intervalo usa o primeiro; depois do último usa o último.
+     */
+    fun paraHora(hora: Int): String {
+        val alvo = "%02d:00".format(hora)
+        return when {
+            lista.contains(alvo) -> alvo
+            hora < 6 -> lista.first()
+            else -> lista.last()
+        }
+    }
 }

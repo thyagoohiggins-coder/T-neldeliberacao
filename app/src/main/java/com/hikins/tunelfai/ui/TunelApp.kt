@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.AlertDialog
@@ -218,6 +219,21 @@ fun TunelApp() {
                             Spacer(Modifier.width(8.dp))
                             Text("Formatar total e enviar")
                         }
+                        Button(
+                            onClick = {
+                                val texto = Formatador.todosAgrupados(registros, config)
+                                if (texto.isBlank())
+                                    Toast.makeText(context, "Nenhum veículo registrado.", Toast.LENGTH_SHORT).show()
+                                else enviarWhatsApp(context, texto, registros.flatMap { it.fotos })
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp)
+                        ) {
+                            Icon(Icons.Filled.Send, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Enviar todos os intervalos (agrupado)")
+                        }
                         Spacer(Modifier.width(0.dp))
                         OutlinedButton(
                             onClick = {
@@ -374,7 +390,12 @@ private fun FormularioRegistro(
     var status by remember { mutableStateOf(Status.LIBERADO) }
     var motivoSel by remember { mutableStateOf(Motivo.DEMERITO_ABERTO.texto) }
     var motivoTexto by remember { mutableStateOf("") }
-    var intervalo by remember { mutableStateOf<String?>(null) }
+    // Já seleciona o intervalo pela hora do celular (ex.: 13:45 -> "13:00").
+    var intervalo by remember {
+        mutableStateOf<String?>(
+            Intervalos.paraHora(java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY))
+        )
+    }
     val fotos = remember { mutableStateListOf<String>() }
 
     val seletorFotos = rememberLauncherForActivityResult(
@@ -512,6 +533,7 @@ private fun GrupoIntervalo(
     val context = LocalContext.current
     val doIntervalo = registros.filter { it.intervalo == intervalo }.sortedBy { it.ordem }
     val incluir = incluirMeta[intervalo] ?: true
+    var editando by remember { mutableStateOf<Registro?>(null) }
 
     val prod = doIntervalo.size
     val aprov = doIntervalo.count { it.status == Status.LIBERADO }
@@ -543,10 +565,27 @@ private fun GrupoIntervalo(
                         fontFamily = FontFamily.Monospace,
                         style = androidx.compose.material3.MaterialTheme.typography.bodySmall
                     )
+                    IconButton(onClick = { editando = r }) {
+                        Icon(Icons.Filled.Edit, contentDescription = "Editar")
+                    }
                     IconButton(onClick = { registros.remove(r); onMudou() }) {
                         Icon(Icons.Filled.Delete, contentDescription = "Excluir")
                     }
                 }
+            }
+
+            editando?.let { alvo ->
+                EditarRegistroDialog(
+                    registro = alvo,
+                    config = config,
+                    onSalvar = { novo ->
+                        val idx = registros.indexOfFirst { it.ordem == alvo.ordem }
+                        if (idx >= 0) registros[idx] = novo
+                        editando = null
+                        onMudou()
+                    },
+                    onDismiss = { editando = null }
+                )
             }
 
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
@@ -600,6 +639,136 @@ private fun GrupoIntervalo(
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EditarRegistroDialog(
+    registro: Registro,
+    config: Configuracao,
+    onSalvar: (Registro) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    var vin by remember { mutableStateOf(registro.vin) }
+    var status by remember { mutableStateOf(registro.status) }
+    var intervalo by remember { mutableStateOf(registro.intervalo) }
+    val temTextoLivre = !registro.motivoTexto.isNullOrBlank()
+    var motivoSel by remember {
+        mutableStateOf(
+            when {
+                temTextoLivre -> MOTIVO_OUTRO
+                registro.motivo != null -> registro.motivo.texto
+                else -> Motivo.DEMERITO_ABERTO.texto
+            }
+        )
+    }
+    var motivoTexto by remember { mutableStateOf(registro.motivoTexto ?: "") }
+    val fotos = remember { mutableStateListOf<String>().apply { addAll(registro.fotos) } }
+
+    val seletorFotos = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        uris.forEach { uri ->
+            if (fotos.size < 3) {
+                try {
+                    context.contentResolver.takePersistableUriPermission(
+                        uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                } catch (_: Exception) { }
+                fotos.add(uri.toString())
+            }
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Editar veículo") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = vin,
+                    onValueChange = { vin = it.uppercase() },
+                    label = { Text("VIN") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                DropdownSelecao(
+                    rotulo = "Status",
+                    valor = status.texto,
+                    opcoes = Status.entries.map { it.texto },
+                    onSelecionar = { txt -> status = Status.entries.first { it.texto == txt } }
+                )
+                if (status == Status.NEGADO && config.motivoAtivado) {
+                    DropdownSelecao(
+                        rotulo = "Motivo",
+                        valor = motivoSel,
+                        opcoes = Motivo.entries.map { it.texto } + MOTIVO_OUTRO,
+                        onSelecionar = { motivoSel = it }
+                    )
+                    if (motivoSel == MOTIVO_OUTRO) {
+                        OutlinedTextField(
+                            value = motivoTexto,
+                            onValueChange = { motivoTexto = it },
+                            label = { Text("Escreva o motivo") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+                DropdownSelecao(
+                    rotulo = "Intervalo",
+                    valor = intervalo,
+                    opcoes = Intervalos.lista,
+                    onSelecionar = { intervalo = it }
+                )
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedButton(
+                        onClick = { seletorFotos.launch(arrayOf("image/*")) },
+                        enabled = fotos.size < 3,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Filled.Add, contentDescription = null)
+                        Spacer(Modifier.width(4.dp))
+                        Text("Fotos ${fotos.size}/3")
+                    }
+                    if (fotos.isNotEmpty()) {
+                        TextButton(onClick = { fotos.clear() }) { Text("Limpar") }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val v = vin.trim()
+                if (v.isBlank()) {
+                    Toast.makeText(context, "Digite o VIN.", Toast.LENGTH_SHORT).show()
+                    return@TextButton
+                }
+                val usarMotivo = status == Status.NEGADO && config.motivoAtivado
+                val escrever = usarMotivo && (config.motivoLivre || motivoSel == MOTIVO_OUTRO)
+                val mEnum = if (usarMotivo && !escrever)
+                    Motivo.entries.first { it.texto == motivoSel } else null
+                val mTexto = if (escrever) motivoTexto.trim().ifBlank { null } else null
+                onSalvar(
+                    registro.copy(
+                        vin = v,
+                        status = status,
+                        motivo = mEnum,
+                        motivoTexto = mTexto,
+                        intervalo = intervalo,
+                        fotos = fotos.toList()
+                    )
+                )
+            }) { Text("Salvar") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

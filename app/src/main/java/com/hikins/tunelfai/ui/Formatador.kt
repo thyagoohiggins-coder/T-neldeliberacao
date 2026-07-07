@@ -72,6 +72,19 @@ object Formatador {
     }
 
     /**
+     * Todos os VINs de todos os intervalos numa única mensagem, agrupados por
+     * intervalo em ordem decrescente (15:00 no topo), cada grupo com sua linha
+     * de meta. Grupos separados por linha em branco.
+     */
+    fun todosAgrupados(todos: List<Registro>, config: Configuracao): String {
+        val intervalos = todos.map { it.intervalo }.distinct().sortedDescending()
+        return intervalos.joinToString("\n\n") { intv ->
+            val doIntervalo = todos.filter { it.intervalo == intv }.sortedBy { it.ordem }
+            intervalo(intv, doIntervalo, incluirMeta = true, config = config)
+        }
+    }
+
+    /**
      * Somente os VINs negados de todos os intervalos, em ordem de adição.
      * Retorna string vazia se não houver nenhum negado.
      */

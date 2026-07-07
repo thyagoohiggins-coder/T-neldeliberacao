@@ -1,62 +1,101 @@
 package com.hikins.tunelfai.ui
 
-import com.hikins.tunelfai.data.MetaInput
+import com.hikins.tunelfai.model.Configuracao
 import com.hikins.tunelfai.model.Intervalos
 import com.hikins.tunelfai.model.Registro
 import com.hikins.tunelfai.model.Status
 
-/** Geração das mensagens de WhatsApp (texto puro, sem emojis). */
+/**
+ * Geração das mensagens de WhatsApp.
+ *
+ * Quando [Configuracao.destacarNegrito] está ligado, os prefixos (VIN, Status,
+ * Motivo, Intervalo e os prefixos de estatística) saem envolvidos por "*", que
+ * o WhatsApp renderiza em negrito automaticamente.
+ *
+ * Produção e Aprovados são calculados automaticamente a partir dos VINs
+ * registrados no intervalo, e a Diferença sai de Prod - Meta.
+ */
 object Formatador {
 
-    private fun paraInt(s: String): Int = s.trim().toIntOrNull() ?: 0
+    /** Envolve o prefixo com "*" para virar negrito no WhatsApp, se configurado. */
+    private fun p(config: Configuracao, texto: String): String =
+        if (config.destacarNegrito) "*$texto*" else texto
+
+    private fun linhaVin(
+        sb: StringBuilder,
+        indice: Int,
+        r: Registro,
+        intervalo: String,
+        config: Configuracao
+    ) {
+        sb.append(indice).append(". ")
+        sb.append(p(config, "VIN")).append(": ").append(r.vin)
+        sb.append(" ").append(p(config, "Status")).append(": ").append(r.status.texto)
+        if (r.status == Status.NEGADO && config.motivoAtivado) {
+            val m = r.motivoExibido()
+            if (!m.isNullOrBlank()) {
+                sb.append(" ").append(p(config, "Motivo")).append(": ").append(m)
+            }
+        }
+        sb.append(" ").append(p(config, "Intervalo")).append(": ").append(intervalo)
+        sb.append('\n')
+    }
 
     /**
      * Mensagem de um intervalo: lista numerada dos veículos na ordem de adição.
-     * Liberado sai sem "Motivo". Se [incluirMeta], acrescenta a linha de estatística.
+     * Se [somenteNegado], só entram os VINs negados.
+     * Se [incluirMeta], acrescenta a linha de estatística com contagem automática.
      */
     fun intervalo(
         intervalo: String,
         registros: List<Registro>,
         incluirMeta: Boolean,
-        meta: MetaInput
+        config: Configuracao,
+        somenteNegado: Boolean = false
     ): String {
+        val lista = if (somenteNegado) registros.filter { it.status == Status.NEGADO } else registros
         val sb = StringBuilder()
-        registros.forEachIndexed { i, r ->
-            sb.append(i + 1).append(". ")
-            sb.append("VIN: ").append(r.vin)
-            sb.append(" Status: ").append(r.status.texto)
-            if (r.status == Status.NEGADO && r.motivo != null) {
-                sb.append(" Motivo: ").append(r.motivo.texto)
-            }
-            sb.append(" Intervalo: ").append(intervalo)
-            sb.append('\n')
+        lista.forEachIndexed { i, r -> linhaVin(sb, i + 1, r, intervalo, config) }
+
+        if (incluirMeta && lista.isNotEmpty()) {
+            val meta = Intervalos.metaDe(intervalo)
+            val prod = registros.size
+            val aprov = registros.count { it.status == Status.LIBERADO }
+            sb.append("-> ")
+                .append(p(config, "Intervalo")).append(": ").append(intervalo)
+                .append(" ").append(p(config, "Meta")).append(": ").append(meta)
+                .append(" ").append(p(config, "Prod")).append(": ").append(prod)
+                .append(" ").append(p(config, "Aprov")).append(": ").append(aprov)
+                .append(" Dif: ").append(prod - meta)   // Produção - Meta
         }
-        if (incluirMeta) {
-            val meta_ = Intervalos.metaDe(intervalo)
-            val prod = paraInt(meta.prod)
-            val aprov = paraInt(meta.aprov)
-            sb.append("Intervalo: ").append(intervalo)
-                .append(" Meta: ").append(meta_)
-                .append(" Prod: ").append(prod)
-                .append(" Aprov: ").append(aprov)
-                .append(" Dif: ").append(prod - meta_)   // Produção - Meta: negativo se não bateu a meta
-        }
+        return sb.toString().trimEnd('\n')
+    }
+
+    /**
+     * Somente os VINs negados de todos os intervalos, em ordem de adição.
+     * Retorna string vazia se não houver nenhum negado.
+     */
+    fun negadosDeTodos(todos: List<Registro>, config: Configuracao): String {
+        val negados = todos.filter { it.status == Status.NEGADO }.sortedBy { it.ordem }
+        if (negados.isEmpty()) return ""
+        val sb = StringBuilder()
+        negados.forEachIndexed { i, r -> linhaVin(sb, i + 1, r, r.intervalo, config) }
         return sb.toString().trimEnd('\n')
     }
 
     /**
      * Resumo total de todos os intervalos.
      * TTL é fixo (80). Prod = total de VINs registrados; Aprov = VINs Liberados.
-     * Dif = saldo acumulado: soma de (Produção digitada - Meta) de cada intervalo
-     * presente no app. Pode terminar positivo ou negativo.
+     * Dif = saldo acumulado: soma de (VINs do intervalo - Meta) de cada intervalo.
      */
-    fun total(todos: List<Registro>, metas: Map<String, MetaInput>): String {
+    fun total(todos: List<Registro>, config: Configuracao): String {
         val prod = todos.size
         val aprov = todos.count { it.status == Status.LIBERADO }
         val difAcumulada = todos.map { it.intervalo }.distinct().sumOf { intv ->
-            val prodDigitado = paraInt(metas[intv]?.prod ?: "")
-            prodDigitado - Intervalos.metaDe(intv)
+            todos.count { it.intervalo == intv } - Intervalos.metaDe(intv)
         }
-        return "TTL: ${Intervalos.META_TOTAL} Prod: $prod Aprov: $aprov Dif: $difAcumulada"
+        return p(config, "TTL") + ": ${Intervalos.META_TOTAL} " +
+            p(config, "Prod") + ": $prod " +
+            p(config, "Aprov") + ": $aprov Dif: $difAcumulada"
     }
 }

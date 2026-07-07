@@ -1,8 +1,13 @@
 package com.hikins.tunelfai
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,8 +35,17 @@ import com.hikins.tunelfai.ui.TunelApp
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
+    private val pedirNotificacao =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            pedirNotificacao.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(primary = Color(0xFF64B5F6))) {
                 AppRoot()

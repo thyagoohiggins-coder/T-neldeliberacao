@@ -8,13 +8,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-/** Entrada de produção/aprovados digitada pelo usuário para um intervalo. */
-data class MetaInput(val prod: String = "", val aprov: String = "")
-
 /** Estado completo persistido do app. */
 data class EstadoTunel(
     val registros: List<Registro> = emptyList(),
-    val metas: Map<String, MetaInput> = emptyMap(),
     val seq: Long = 0
 )
 
@@ -34,23 +30,23 @@ class Repositorio(context: Context) {
                 val o = arr.getJSONObject(i)
                 val status = Status.valueOf(o.getString("status"))
                 val motivoStr = o.optString("motivo", "")
+
+                val fotos = mutableListOf<String>()
+                val fotosArr = o.optJSONArray("fotos") ?: JSONArray()
+                for (j in 0 until fotosArr.length()) fotos += fotosArr.getString(j)
+
                 registros += Registro(
                     vin = o.getString("vin"),
                     status = status,
                     motivo = if (motivoStr.isBlank()) null else Motivo.valueOf(motivoStr),
+                    motivoTexto = o.optString("motivoTexto", "").ifBlank { null },
                     intervalo = o.getString("intervalo"),
-                    ordem = o.getLong("ordem")
+                    ordem = o.getLong("ordem"),
+                    fotos = fotos
                 )
             }
 
-            val metas = mutableMapOf<String, MetaInput>()
-            val metasObj = raiz.optJSONObject("metas") ?: JSONObject()
-            for (chave in metasObj.keys()) {
-                val m = metasObj.getJSONObject(chave)
-                metas[chave] = MetaInput(m.optString("prod", ""), m.optString("aprov", ""))
-            }
-
-            EstadoTunel(registros, metas, raiz.optLong("seq", 0))
+            EstadoTunel(registros, raiz.optLong("seq", 0))
         } catch (e: Exception) {
             EstadoTunel()
         }
@@ -61,22 +57,20 @@ class Repositorio(context: Context) {
 
         val arr = JSONArray()
         estado.registros.forEach { r ->
+            val fotosArr = JSONArray()
+            r.fotos.forEach { fotosArr.put(it) }
             arr.put(
                 JSONObject()
                     .put("vin", r.vin)
                     .put("status", r.status.name)
                     .put("motivo", r.motivo?.name ?: "")
+                    .put("motivoTexto", r.motivoTexto ?: "")
                     .put("intervalo", r.intervalo)
                     .put("ordem", r.ordem)
+                    .put("fotos", fotosArr)
             )
         }
         raiz.put("registros", arr)
-
-        val metasObj = JSONObject()
-        estado.metas.forEach { (chave, m) ->
-            metasObj.put(chave, JSONObject().put("prod", m.prod).put("aprov", m.aprov))
-        }
-        raiz.put("metas", metasObj)
         raiz.put("seq", estado.seq)
 
         arquivo.writeText(raiz.toString())

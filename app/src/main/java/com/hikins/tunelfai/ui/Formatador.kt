@@ -101,17 +101,15 @@ object Formatador {
     /**
      * Resumo total de todos os intervalos.
      * TTL é fixo (80). Prod = total de VINs registrados; Aprov = VINs Liberados.
-     * Dif = saldo acumulado: soma de (VINs do intervalo - Meta) de cada intervalo.
+     * Dif = Meta do dia (80) - Prod: quantos ainda faltam para bater a meta.
      */
     fun total(todos: List<Registro>, config: Configuracao): String {
         val prod = todos.size
         val aprov = todos.count { it.status == Status.LIBERADO }
-        val difAcumulada = todos.map { it.intervalo }.distinct().sumOf { intv ->
-            todos.count { it.intervalo == intv } - Intervalos.metaDe(intv)
-        }
+        val dif = Intervalos.META_TOTAL - prod
         return p(config, "TTL") + ": ${Intervalos.META_TOTAL} " +
             p(config, "Prod") + ": $prod " +
             p(config, "Aprov") + ": $aprov " +
-            p(config, "Dif") + ": $difAcumulada"
+            p(config, "Dif") + ": $dif"
     }
 }

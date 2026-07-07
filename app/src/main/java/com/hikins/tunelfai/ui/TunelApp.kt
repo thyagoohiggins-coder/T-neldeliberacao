@@ -9,6 +9,8 @@ import android.widget.Toast
 import androidx.core.content.FileProvider
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -95,7 +97,7 @@ fun TunelApp() {
     val incluirMeta = remember { mutableStateMapOf<String, Boolean>() }
     var seq by remember { mutableStateOf(0L) }
     var config by remember { mutableStateOf(Configuracao()) }
-    var fotoGlobal by remember { mutableStateOf<String?>(null) }
+    val fotosGlobais = remember { mutableStateListOf<String>() }
 
     var menuAberto by remember { mutableStateOf(false) }
     var confirmarLimpar by remember { mutableStateOf(false) }
@@ -111,16 +113,23 @@ fun TunelApp() {
             file.outputStream().use { out ->
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
             }
+            val uri = FileProvider.getUriForFile(
+                context, "${context.packageName}.fileprovider", file
+            )
+            fotosGlobais.add(uri.toString())
+        }
+    }
+
+    val selecionarImagens = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        uris.forEach { uri ->
             try {
                 context.contentResolver.takePersistableUriPermission(
-                    FileProvider.getUriForFile(
-                        context, "${context.packageName}.fileprovider", file
-                    ), Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
             } catch (_: Exception) { }
-            fotoGlobal = FileProvider.getUriForFile(
-                context, "${context.packageName}.fileprovider", file
-            ).toString()
+            fotosGlobais.add(uri.toString())
         }
     }
 
@@ -208,6 +217,7 @@ fun TunelApp() {
             item {
                 FormularioRegistro(
                     config = config,
+                    registrosExistentes = registros,
                     onAdicionar = { vin, status, motivo, motivoTexto, intervalo, fotos ->
                         seq += 1
                         registros.add(Registro(vin, status, motivo, motivoTexto, intervalo, seq, fotos))
@@ -280,7 +290,11 @@ fun TunelApp() {
                             Text("Enviar só negados (todos)")
                         }
                         HorizontalDivider(Modifier.padding(vertical = 12.dp))
-                        Text("Enviar imagem", fontWeight = FontWeight.Bold, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
+                        Text(
+                            "Enviar imagem" + if (fotosGlobais.isNotEmpty()) " (${fotosGlobais.size})" else "",
+                            fontWeight = FontWeight.Bold,
+                            style = androidx.compose.material3.MaterialTheme.typography.labelMedium
+                        )
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -295,17 +309,34 @@ fun TunelApp() {
                                 Spacer(Modifier.width(4.dp))
                                 Text("Câmera")
                             }
-                            if (fotoGlobal != null) {
+                            OutlinedButton(
+                                onClick = { selecionarImagens.launch(arrayOf("image/*")) },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Filled.Add, contentDescription = null)
+                                Spacer(Modifier.width(4.dp))
+                                Text("Galeria")
+                            }
+                        }
+                        if (fotosGlobais.isNotEmpty()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
                                 Button(
-                                    onClick = { enviarWhatsApp(context, "", listOf(fotoGlobal!!)) },
+                                    onClick = {
+                                        enviarWhatsApp(context, "", fotosGlobais.toList())
+                                    },
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     Icon(Icons.Filled.Send, contentDescription = null)
                                     Spacer(Modifier.width(4.dp))
-                                    Text("Enviar")
+                                    Text("Enviar ${fotosGlobais.size}")
                                 }
                                 OutlinedButton(
-                                    onClick = { fotoGlobal = null },
+                                    onClick = { fotosGlobais.clear() },
                                     modifier = Modifier.weight(0.8f)
                                 ) {
                                     Text("Limpar")
@@ -385,16 +416,21 @@ private fun ConfiguracoesDialog(
     var vibracaoAtivada by remember { mutableStateOf(config.vibracaoAtivada) }
     var vibracaoSegundos by remember { mutableStateOf(config.vibracaoSegundos.toString()) }
     var destacarNegrito by remember { mutableStateOf(config.destacarNegrito) }
+    var retornoAuto by remember { mutableStateOf(config.retornoAuto) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Configurações") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
                 LinhaSwitch("Exigir foto por VIN para adicionar", exigirFoto) { exigirFoto = it }
                 LinhaSwitch("Ativar motivo do VIN negado", motivoAtivado) { motivoAtivado = it }
                 LinhaSwitch("Escrever o motivo à mão", motivoLivre) { motivoLivre = it }
                 LinhaSwitch("Destacar prefixos em negrito", destacarNegrito) { destacarNegrito = it }
+                LinhaSwitch("VIN repetido: preencher motivo de retorno", retornoAuto) { retornoAuto = it }
                 HorizontalDivider(Modifier.padding(vertical = 4.dp))
                 LinhaSwitch("Lembrete + vibração antes do intervalo", vibracaoAtivada) { vibracaoAtivada = it }
                 OutlinedTextField(
@@ -420,7 +456,8 @@ private fun ConfiguracoesDialog(
                         motivoLivre = motivoLivre,
                         vibracaoAtivada = vibracaoAtivada,
                         vibracaoSegundos = (vibracaoSegundos.toIntOrNull() ?: 3).coerceIn(1, 60),
-                        destacarNegrito = destacarNegrito
+                        destacarNegrito = destacarNegrito,
+                        retornoAuto = retornoAuto
                     )
                 )
             }) { Text("Salvar") }
@@ -445,6 +482,7 @@ private fun LinhaSwitch(rotulo: String, valor: Boolean, onMudar: (Boolean) -> Un
 @Composable
 private fun FormularioRegistro(
     config: Configuracao,
+    registrosExistentes: List<Registro>,
     onAdicionar: (String, Status, Motivo?, String?, String, List<String>) -> Unit
 ) {
     val context = LocalContext.current
@@ -481,7 +519,21 @@ private fun FormularioRegistro(
 
             OutlinedTextField(
                 value = vin,
-                onValueChange = { vin = it.uppercase() },
+                onValueChange = { novo ->
+                    vin = novo.uppercase()
+                    // VIN repetido: já marca Negado e preenche o motivo de retorno.
+                    if (config.retornoAuto && config.motivoAtivado) {
+                        val alvo = vin.trim()
+                        val ints = if (alvo.isBlank()) emptyList()
+                        else registrosExistentes.filter { it.vin == alvo }
+                            .map { it.intervalo }.distinct().sorted()
+                        if (ints.isNotEmpty()) {
+                            status = Status.NEGADO
+                            motivoSel = MOTIVO_OUTRO
+                            motivoTexto = "[Retornou para o túnel de liberação ${ints.joinToString(", ")}]"
+                        }
+                    }
+                },
                 label = { Text("VIN") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),

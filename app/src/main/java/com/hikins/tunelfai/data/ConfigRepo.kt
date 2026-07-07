@@ -14,7 +14,8 @@ class ConfigRepo(context: Context) {
         motivoLivre = prefs.getBoolean("motivoLivre", false),
         vibracaoAtivada = prefs.getBoolean("vibracaoAtivada", false),
         vibracaoSegundos = prefs.getInt("vibracaoSegundos", 3),
-        destacarNegrito = prefs.getBoolean("destacarNegrito", true)
+        destacarNegrito = prefs.getBoolean("destacarNegrito", true),
+        retornoAuto = prefs.getBoolean("retornoAuto", false)
     )
 
     fun salvar(c: Configuracao) {
@@ -25,6 +26,7 @@ class ConfigRepo(context: Context) {
             .putBoolean("vibracaoAtivada", c.vibracaoAtivada)
             .putInt("vibracaoSegundos", c.vibracaoSegundos)
             .putBoolean("destacarNegrito", c.destacarNegrito)
+            .putBoolean("retornoAuto", c.retornoAuto)
             .apply()
     }
 }

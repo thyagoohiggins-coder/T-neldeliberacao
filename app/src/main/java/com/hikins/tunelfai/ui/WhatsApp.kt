@@ -22,25 +22,24 @@ fun enviarWhatsApp(context: Context, texto: String, fotos: List<String> = emptyL
     val uris = fotos.mapNotNull { runCatching { Uri.parse(it) }.getOrNull() }
     val pacotes = listOf("com.whatsapp", "com.whatsapp.w4b")
 
-    for (pacote in pacotes) {
-        val i = criarIntent(texto, uris).apply { setPackage(pacote) }
-        if (i.resolveActivity(context.packageManager) != null) {
-            context.startActivity(i)
-            return
-        }
-    }
-
-    // Fallback sem fotos: abre o WhatsApp pela web se o app não estiver instalado.
     try {
-        if (uris.isNotEmpty()) {
-            val i = criarIntent(texto, uris)
-            context.startActivity(Intent.createChooser(i, "Enviar"))
-            return
+        for (pacote in pacotes) {
+            val i = criarIntent(texto, uris).apply { setPackage(pacote) }
+            if (i.resolveActivity(context.packageManager) != null) {
+                context.startActivity(i)
+                return
+            }
         }
-        val url = "https://wa.me/?text=" + Uri.encode(texto)
-        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+
+        // Fallback: se o WhatsApp não estiver instalado.
+        if (uris.isNotEmpty()) {
+            context.startActivity(Intent.createChooser(criarIntent(texto, uris), "Enviar"))
+        } else {
+            val url = "https://wa.me/?text=" + Uri.encode(texto)
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        }
     } catch (e: Exception) {
-        Toast.makeText(context, "WhatsApp não encontrado.", Toast.LENGTH_LONG).show()
+        Toast.makeText(context, "Não foi possível enviar: ${e.message}", Toast.LENGTH_LONG).show()
     }
 }
 
@@ -60,9 +59,10 @@ private fun criarIntent(texto: String, uris: List<Uri>): Intent {
     }
     return base.apply {
         type = "image/*"
-        putExtra(Intent.EXTRA_TEXT, texto)
+        if (texto.isNotBlank()) putExtra(Intent.EXTRA_TEXT, texto)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        clipData = ClipData.newUri(null, "fotos", uris.first()).also { cd ->
+        // newRawUri (sem ContentResolver) evita NPE com URIs content://.
+        clipData = ClipData.newRawUri("fotos", uris.first()).also { cd ->
             uris.drop(1).forEach { cd.addItem(ClipData.Item(it)) }
         }
     }

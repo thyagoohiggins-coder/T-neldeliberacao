@@ -9,6 +9,8 @@ package com.hikins.tunelfai.model
  * @param vibracaoAtivada liga o lembrete "Fazer Relatório" 10 min antes de cada intervalo
  * @param vibracaoSegundos duração da vibração forte do lembrete
  * @param destacarNegrito envolve os prefixos (VIN, Status, ...) com "*" p/ negrito no WhatsApp
+ * @param retornoAuto ao digitar um VIN já registrado, marca "Negado" e preenche o motivo
+ *                    automaticamente com "[Retornou para o túnel de liberação <intervalos>]"
  */
 data class Configuracao(
     val exigirFoto: Boolean = false,
@@ -16,5 +18,6 @@ data class Configuracao(
     val motivoLivre: Boolean = false,
     val vibracaoAtivada: Boolean = false,
     val vibracaoSegundos: Int = 3,
-    val destacarNegrito: Boolean = true
+    val destacarNegrito: Boolean = true,
+    val retornoAuto: Boolean = false
 )

@@ -10,6 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -118,9 +119,9 @@ private fun Splash() {
 
             // Pontos orbitais
             for (i in 0 until numPoints) {
-                val angle = (i * 60f + rotation) * (Math.PI / 180f)
-                val x = centerX + (radius * kotlin.math.cos(angle)).toFloat()
-                val y = centerY + (radius * kotlin.math.sin(angle)).toFloat()
+                val angle = Math.toRadians(i * 60.0 + rotation)
+                val x = centerX + radius * kotlin.math.cos(angle).toFloat()
+                val y = centerY + radius * kotlin.math.sin(angle).toFloat()
                 drawCircle(
                     color = Color(0xFF64B5F6).copy(alpha = 0.6f),
                     radius = 8f,

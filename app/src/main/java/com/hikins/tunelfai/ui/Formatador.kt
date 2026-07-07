@@ -66,7 +66,7 @@ object Formatador {
                 .append(" ").append(p(config, "Meta")).append(": ").append(meta)
                 .append(" ").append(p(config, "Prod")).append(": ").append(prod)
                 .append(" ").append(p(config, "Aprov")).append(": ").append(aprov)
-                .append(" Dif: ").append(prod - meta)   // Produção - Meta
+                .append(" ").append(p(config, "Dif")).append(": ").append(prod - meta)   // Produção - Meta
         }
         return sb.toString().trimEnd('\n')
     }
@@ -96,6 +96,7 @@ object Formatador {
         }
         return p(config, "TTL") + ": ${Intervalos.META_TOTAL} " +
             p(config, "Prod") + ": $prod " +
-            p(config, "Aprov") + ": $aprov Dif: $difAcumulada"
+            p(config, "Aprov") + ": $aprov " +
+            p(config, "Dif") + ": $difAcumulada"
     }
 }

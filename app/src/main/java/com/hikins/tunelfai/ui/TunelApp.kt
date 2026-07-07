@@ -72,6 +72,9 @@ import com.hikins.tunelfai.update.Atualizador
 import com.hikins.tunelfai.update.InfoAtualizacao
 import kotlinx.coroutines.launch
 
+/** Opção do seletor de Motivo que libera o campo de texto livre. */
+private const val MOTIVO_OUTRO = "Outro (escrever)"
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TunelApp() {
@@ -369,7 +372,7 @@ private fun FormularioRegistro(
     val context = LocalContext.current
     var vin by remember { mutableStateOf("") }
     var status by remember { mutableStateOf(Status.LIBERADO) }
-    var motivo by remember { mutableStateOf(Motivo.DEMERITO_ABERTO) }
+    var motivoSel by remember { mutableStateOf(Motivo.DEMERITO_ABERTO.texto) }
     var motivoTexto by remember { mutableStateOf("") }
     var intervalo by remember { mutableStateOf<String?>(null) }
     val fotos = remember { mutableStateListOf<String>() }
@@ -413,6 +416,7 @@ private fun FormularioRegistro(
             // Motivo só aparece quando Negado e ativado nas configurações
             if (status == Status.NEGADO && config.motivoAtivado) {
                 if (config.motivoLivre) {
+                    // Configuração "escrever à mão": só campo de texto.
                     OutlinedTextField(
                         value = motivoTexto,
                         onValueChange = { motivoTexto = it },
@@ -421,12 +425,22 @@ private fun FormularioRegistro(
                         modifier = Modifier.fillMaxWidth()
                     )
                 } else {
+                    // Lista de motivos + opção "Outro (escrever)" para digitar.
                     DropdownSelecao(
                         rotulo = "Motivo",
-                        valor = motivo.texto,
-                        opcoes = Motivo.entries.map { it.texto },
-                        onSelecionar = { txt -> motivo = Motivo.entries.first { it.texto == txt } }
+                        valor = motivoSel,
+                        opcoes = Motivo.entries.map { it.texto } + MOTIVO_OUTRO,
+                        onSelecionar = { motivoSel = it }
                     )
+                    if (motivoSel == MOTIVO_OUTRO) {
+                        OutlinedTextField(
+                            value = motivoTexto,
+                            onValueChange = { motivoTexto = it },
+                            label = { Text("Escreva o motivo") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
             }
 
@@ -468,12 +482,14 @@ private fun FormularioRegistro(
                             Toast.makeText(context, "Anexe ao menos uma foto do VIN.", Toast.LENGTH_LONG).show()
                         else -> {
                             val usarMotivo = status == Status.NEGADO && config.motivoAtivado
-                            val mEnum = if (usarMotivo && !config.motivoLivre) motivo else null
-                            val mTexto = if (usarMotivo && config.motivoLivre)
-                                motivoTexto.trim().ifBlank { null } else null
+                            val escrever = usarMotivo && (config.motivoLivre || motivoSel == MOTIVO_OUTRO)
+                            val mEnum = if (usarMotivo && !escrever)
+                                Motivo.entries.first { it.texto == motivoSel } else null
+                            val mTexto = if (escrever) motivoTexto.trim().ifBlank { null } else null
                             onAdicionar(v, status, mEnum, mTexto, intervalo!!, fotos.toList())
                             vin = ""
                             motivoTexto = ""
+                            motivoSel = Motivo.DEMERITO_ABERTO.texto
                             fotos.clear()
                         }
                     }

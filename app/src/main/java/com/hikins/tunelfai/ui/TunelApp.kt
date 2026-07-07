@@ -1,9 +1,12 @@
 package com.hikins.tunelfai.ui
 
+import android.content.ClipData
 import android.content.ClipboardManager
+import android.graphics.Bitmap
 import android.content.Context as AndroidContext
 import android.content.Intent
 import android.widget.Toast
+import androidx.core.content.FileProvider
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -106,16 +109,16 @@ fun TunelApp() {
         if (bitmap != null) {
             val file = java.io.File(context.cacheDir, "foto_${System.currentTimeMillis()}.png")
             file.outputStream().use { out ->
-                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
             }
             try {
                 context.contentResolver.takePersistableUriPermission(
-                    androidx.core.content.FileProvider.getUriForFile(
+                    FileProvider.getUriForFile(
                         context, "${context.packageName}.fileprovider", file
                     ), Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
             } catch (_: Exception) { }
-            fotoGlobal = androidx.core.content.FileProvider.getUriForFile(
+            fotoGlobal = FileProvider.getUriForFile(
                 context, "${context.packageName}.fileprovider", file
             ).toString()
         }
@@ -700,7 +703,7 @@ private fun GrupoIntervalo(
                     onClick = {
                         val texto = Formatador.intervalo(intervalo, doIntervalo, incluir, config)
                         val cm = context.getSystemService(AndroidContext.CLIPBOARD_SERVICE) as ClipboardManager
-                        val clip = android.content.ClipData.newPlainText("intervalo_$intervalo", texto)
+                        val clip = ClipData.newPlainText("intervalo_$intervalo", texto)
                         cm.setPrimaryClip(clip)
                         Toast.makeText(context, "Copiado para a área de transferência.", Toast.LENGTH_SHORT).show()
                     },

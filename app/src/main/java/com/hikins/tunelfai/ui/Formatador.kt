@@ -75,12 +75,14 @@ object Formatador {
      * Todos os VINs de todos os intervalos numa única mensagem, agrupados por
      * intervalo em ordem decrescente (15:00 no topo), cada grupo com sua linha
      * de meta. Grupos separados por linha em branco.
+     * [incluirMetas]: mapa de intervalo -> flag se deve incluir a meta naquela linha.
      */
-    fun todosAgrupados(todos: List<Registro>, config: Configuracao): String {
+    fun todosAgrupados(todos: List<Registro>, config: Configuracao, incluirMetas: Map<String, Boolean> = emptyMap()): String {
         val intervalos = todos.map { it.intervalo }.distinct().sortedDescending()
         return intervalos.joinToString("\n\n") { intv ->
             val doIntervalo = todos.filter { it.intervalo == intv }.sortedBy { it.ordem }
-            intervalo(intv, doIntervalo, incluirMeta = true, config = config)
+            val incluir = incluirMetas[intv] ?: true
+            intervalo(intv, doIntervalo, incluir, config)
         }
     }
 

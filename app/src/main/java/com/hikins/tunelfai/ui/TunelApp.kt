@@ -1,5 +1,7 @@
 package com.hikins.tunelfai.ui
 
+import android.content.ClipboardManager
+import android.content.Context as AndroidContext
 import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -16,9 +18,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -88,12 +92,34 @@ fun TunelApp() {
     val incluirMeta = remember { mutableStateMapOf<String, Boolean>() }
     var seq by remember { mutableStateOf(0L) }
     var config by remember { mutableStateOf(Configuracao()) }
+    var fotoGlobal by remember { mutableStateOf<String?>(null) }
 
     var menuAberto by remember { mutableStateOf(false) }
     var confirmarLimpar by remember { mutableStateOf(false) }
     var mostrarConfig by remember { mutableStateOf(false) }
     var info by remember { mutableStateOf<InfoAtualizacao?>(null) }
     var mostrarDialogoUpdate by remember { mutableStateOf(false) }
+
+    val capturarFoto = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        if (bitmap != null) {
+            val file = java.io.File(context.cacheDir, "foto_${System.currentTimeMillis()}.png")
+            file.outputStream().use { out ->
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+            }
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    androidx.core.content.FileProvider.getUriForFile(
+                        context, "${context.packageName}.fileprovider", file
+                    ), Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: Exception) { }
+            fotoGlobal = androidx.core.content.FileProvider.getUriForFile(
+                context, "${context.packageName}.fileprovider", file
+            ).toString()
+        }
+    }
 
     fun persistir() {
         repo.salvar(EstadoTunel(registros.toList(), seq))
@@ -221,7 +247,7 @@ fun TunelApp() {
                         }
                         Button(
                             onClick = {
-                                val texto = Formatador.todosAgrupados(registros, config)
+                                val texto = Formatador.todosAgrupados(registros, config, incluirMeta)
                                 if (texto.isBlank())
                                     Toast.makeText(context, "Nenhum veículo registrado.", Toast.LENGTH_SHORT).show()
                                 else enviarWhatsApp(context, texto, registros.flatMap { it.fotos })
@@ -249,6 +275,39 @@ fun TunelApp() {
                             Icon(Icons.Filled.Send, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
                             Text("Enviar só negados (todos)")
+                        }
+                        HorizontalDivider(Modifier.padding(vertical = 12.dp))
+                        Text("Enviar imagem", fontWeight = FontWeight.Bold, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = { capturarFoto.launch(null) },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Filled.PhotoCamera, contentDescription = null)
+                                Spacer(Modifier.width(4.dp))
+                                Text("Câmera")
+                            }
+                            if (fotoGlobal != null) {
+                                Button(
+                                    onClick = { enviarWhatsApp(context, "", listOf(fotoGlobal!!)) },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Filled.Send, contentDescription = null)
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("Enviar")
+                                }
+                                OutlinedButton(
+                                    onClick = { fotoGlobal = null },
+                                    modifier = Modifier.weight(0.8f)
+                                ) {
+                                    Text("Limpar")
+                                }
+                            }
                         }
                     }
                 }
@@ -609,8 +668,7 @@ private fun GrupoIntervalo(
             Button(
                 onClick = {
                     val texto = Formatador.intervalo(intervalo, doIntervalo, incluir, config)
-                    val fotos = doIntervalo.flatMap { it.fotos }
-                    enviarWhatsApp(context, texto, fotos)
+                    enviarWhatsApp(context, texto)
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -619,23 +677,39 @@ private fun GrupoIntervalo(
                 Text("Formatar intervalo e enviar")
             }
 
-            OutlinedButton(
-                onClick = {
-                    val texto = Formatador.intervalo(intervalo, doIntervalo, incluir, config, somenteNegado = true)
-                    if (texto.isBlank())
-                        Toast.makeText(context, "Nenhum VIN negado neste intervalo.", Toast.LENGTH_SHORT).show()
-                    else {
-                        val fotos = doIntervalo.filter { it.status == Status.NEGADO }.flatMap { it.fotos }
-                        enviarWhatsApp(context, texto, fotos)
-                    }
-                },
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp)
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(Icons.Filled.Send, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Enviar só negados")
+                OutlinedButton(
+                    onClick = {
+                        val texto = Formatador.intervalo(intervalo, doIntervalo, incluir, config, somenteNegado = true)
+                        if (texto.isBlank())
+                            Toast.makeText(context, "Nenhum VIN negado neste intervalo.", Toast.LENGTH_SHORT).show()
+                        else enviarWhatsApp(context, texto)
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Filled.Send, contentDescription = null)
+                    Spacer(Modifier.width(4.dp))
+                    Text("Enviar negados")
+                }
+                OutlinedButton(
+                    onClick = {
+                        val texto = Formatador.intervalo(intervalo, doIntervalo, incluir, config)
+                        val cm = context.getSystemService(AndroidContext.CLIPBOARD_SERVICE) as ClipboardManager
+                        val clip = android.content.ClipData.newPlainText("intervalo_$intervalo", texto)
+                        cm.setPrimaryClip(clip)
+                        Toast.makeText(context, "Copiado para a área de transferência.", Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Filled.ContentCopy, contentDescription = null)
+                    Spacer(Modifier.width(4.dp))
+                    Text("Copiar")
+                }
             }
         }
     }

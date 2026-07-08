@@ -720,6 +720,14 @@ private fun GrupoIntervalo(
                         fontFamily = FontFamily.Monospace,
                         style = androidx.compose.material3.MaterialTheme.typography.bodySmall
                     )
+                    IconButton(
+                        onClick = {
+                            val texto = Formatador.umVin(r, config)
+                            enviarWhatsApp(context, texto, r.fotos)
+                        }
+                    ) {
+                        Icon(Icons.Filled.Send, contentDescription = "Enviar VIN")
+                    }
                     IconButton(onClick = { editando = r }) {
                         Icon(Icons.Filled.Edit, contentDescription = "Editar")
                     }

@@ -41,6 +41,21 @@ object Formatador {
         sb.append('\n')
     }
 
+    /** Formata um único VIN com seus dados (Status, Motivo, Intervalo). */
+    fun umVin(registro: Registro, config: Configuracao): String {
+        val sb = StringBuilder()
+        sb.append(p(config, "VIN")).append(": ").append(registro.vin)
+        sb.append(" ").append(p(config, "Status")).append(": ").append(registro.status.texto)
+        if (registro.status == Status.NEGADO && config.motivoAtivado) {
+            val m = registro.motivoExibido()
+            if (!m.isNullOrBlank()) {
+                sb.append(" ").append(p(config, "Motivo")).append(": ").append(m)
+            }
+        }
+        sb.append(" ").append(p(config, "Intervalo")).append(": ").append(registro.intervalo)
+        return sb.toString()
+    }
+
     /**
      * Mensagem de um intervalo: lista numerada dos veículos na ordem de adição.
      * Se [somenteNegado], só entram os VINs negados.

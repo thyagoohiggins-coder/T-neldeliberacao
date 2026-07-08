@@ -105,19 +105,23 @@ fun TunelApp() {
     var info by remember { mutableStateOf<InfoAtualizacao?>(null) }
     var mostrarDialogoUpdate by remember { mutableStateOf(false) }
 
+    var fotoTempUri: android.net.Uri? = null
     val capturarFoto = rememberLauncherForActivityResult(
-        ActivityResultContracts.TakePicturePreview()
-    ) { bitmap ->
-        if (bitmap != null) {
-            val file = java.io.File(context.cacheDir, "foto_${System.currentTimeMillis()}.png")
-            file.outputStream().use { out ->
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
-            }
-            val uri = FileProvider.getUriForFile(
-                context, "${context.packageName}.fileprovider", file
-            )
-            fotosGlobais.add(uri.toString())
+        ActivityResultContracts.TakePicture()
+    ) { sucesso ->
+        if (sucesso && fotoTempUri != null) {
+            fotosGlobais.add(fotoTempUri.toString())
+            fotoTempUri = null
         }
+    }
+
+    fun lancarCameraPorGlobal() {
+        val file = java.io.File(context.cacheDir, "foto_${System.currentTimeMillis()}.jpg")
+        val uri = FileProvider.getUriForFile(
+            context, "${context.packageName}.fileprovider", file
+        )
+        fotoTempUri = uri
+        capturarFoto.launch(uri)
     }
 
     val selecionarImagens = rememberLauncherForActivityResult(
@@ -227,8 +231,8 @@ fun TunelApp() {
                 )
             }
 
-            // Intervalos presentes, em ordem decrescente (15:00 no topo)
-            val intervalosPresentes = registros.map { it.intervalo }.distinct().sortedDescending()
+            // Intervalos presentes, em ordem crescente (06:00 no topo)
+            val intervalosPresentes = registros.map { it.intervalo }.distinct().sorted()
             items(intervalosPresentes, key = { it }) { intervalo ->
                 GrupoIntervalo(
                     intervalo = intervalo,
@@ -305,7 +309,7 @@ fun TunelApp() {
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             OutlinedButton(
-                                onClick = { capturarFoto.launch(null) },
+                                onClick = { lancarCameraPorGlobal() },
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Icon(Icons.Filled.PhotoCamera, contentDescription = null)
@@ -505,18 +509,24 @@ private fun FormularioRegistro(
     }
     val fotos = remember { mutableStateListOf<String>() }
 
-    val capturarFoto = rememberLauncherForActivityResult(
-        ActivityResultContracts.TakePicturePreview()
-    ) { bitmap ->
-        if (bitmap != null && fotos.size < 3) {
-            val file = java.io.File(context.cacheDir, "foto_${System.currentTimeMillis()}.png")
-            file.outputStream().use { out ->
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
-            }
+    var fotoTempUriVin: android.net.Uri? = null
+    val capturarFotoVin = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { sucesso ->
+        if (sucesso && fotoTempUriVin != null && fotos.size < 3) {
+            fotos.add(fotoTempUriVin.toString())
+            fotoTempUriVin = null
+        }
+    }
+
+    fun lancarCameraPorVin() {
+        if (fotos.size < 3) {
+            val file = java.io.File(context.cacheDir, "foto_${System.currentTimeMillis()}.jpg")
             val uri = FileProvider.getUriForFile(
                 context, "${context.packageName}.fileprovider", file
             )
-            fotos.add(uri.toString())
+            fotoTempUriVin = uri
+            capturarFotoVin.launch(uri)
         }
     }
 
@@ -616,7 +626,7 @@ private fun FormularioRegistro(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 OutlinedButton(
-                    onClick = { capturarFoto.launch(null) },
+                    onClick = { lancarCameraPorVin() },
                     enabled = fotos.size < 3,
                     modifier = Modifier.weight(1f)
                 ) {

@@ -3,7 +3,8 @@ package com.hikins.tunelfai.model
 /** Status possíveis de um veículo no túnel. */
 enum class Status(val texto: String) {
     LIBERADO("Liberado"),
-    NEGADO("Negado")
+    NEGADO("Negado"),
+    SEM_STATUS("--")
 }
 
 /** Motivo padrão da negação (só se aplica quando NEGADO e sem motivo livre). */
@@ -16,7 +17,7 @@ enum class Motivo(val texto: String) {
  * Um veículo registrado no Túnel de liberação.
  * @param motivo motivo padrão (null quando LIBERADO ou quando há motivo livre)
  * @param motivoTexto motivo escrito à mão pelo usuário (null quando não usado)
- * @param fotos URIs de até 3 fotos anexadas ao veículo
+ * @param fotos URIs de até 6 fotos anexadas ao veículo
  * @param ordem sequência global de adição, usada para ordenar dentro do intervalo.
  */
 data class Registro(

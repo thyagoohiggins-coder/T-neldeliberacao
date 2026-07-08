@@ -11,7 +11,9 @@ import java.io.File
 /** Estado completo persistido do app. */
 data class EstadoTunel(
     val registros: List<Registro> = emptyList(),
-    val seq: Long = 0
+    val seq: Long = 0,
+    val vinTemporario: String = "",
+    val incluirMeta: Map<String, Boolean> = emptyMap()
 )
 
 /** Lê e grava o estado em um arquivo JSON no armazenamento interno do app. */
@@ -46,7 +48,18 @@ class Repositorio(context: Context) {
                 )
             }
 
-            EstadoTunel(registros, raiz.optLong("seq", 0))
+            val incluirMetaObj = raiz.optJSONObject("incluirMeta") ?: JSONObject()
+            val incluirMeta = mutableMapOf<String, Boolean>()
+            incluirMetaObj.keys().forEach { intervalo ->
+                incluirMeta[intervalo] = incluirMetaObj.getBoolean(intervalo)
+            }
+
+            EstadoTunel(
+                registros,
+                raiz.optLong("seq", 0),
+                raiz.optString("vinTemporario", ""),
+                incluirMeta
+            )
         } catch (e: Exception) {
             EstadoTunel()
         }
@@ -72,6 +85,13 @@ class Repositorio(context: Context) {
         }
         raiz.put("registros", arr)
         raiz.put("seq", estado.seq)
+        raiz.put("vinTemporario", estado.vinTemporario)
+
+        val incluirMetaObj = JSONObject()
+        estado.incluirMeta.forEach { (intervalo, incluir) ->
+            incluirMetaObj.put(intervalo, incluir)
+        }
+        raiz.put("incluirMeta", incluirMetaObj)
 
         arquivo.writeText(raiz.toString())
     }

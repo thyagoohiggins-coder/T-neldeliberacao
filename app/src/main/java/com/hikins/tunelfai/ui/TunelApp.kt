@@ -137,8 +137,8 @@ fun TunelApp() {
         }
     }
 
-    fun persistir() {
-        repo.salvar(EstadoTunel(registros.toList(), seq))
+    fun persistir(vinTemp: String = "") {
+        repo.salvar(EstadoTunel(registros.toList(), seq, vinTemp, incluirMeta.toMap()))
     }
 
     fun aplicarConfig(nova: Configuracao) {
@@ -152,6 +152,7 @@ fun TunelApp() {
         val e = repo.carregar()
         registros.addAll(e.registros)
         seq = e.seq
+        incluirMeta.putAll(e.incluirMeta)
         config = configRepo.carregar()
         if (config.vibracaoAtivada) Lembretes.agendar(context, config.vibracaoSegundos)
         // Checagem silenciosa de atualização ao abrir.
@@ -497,8 +498,11 @@ private fun FormularioRegistro(
 ) {
     val context = LocalContext.current
     val vinInicial = if (config.vinPrefixoVB) "VB" else ""
-    var vin by remember(config.vinPrefixoVB) { mutableStateOf(vinInicial) }
-    var status by remember { mutableStateOf(Status.LIBERADO) }
+    var vin by remember(config.vinPrefixoVB) {
+        // Recupera VIN temporário salvo, ou começa com prefixo VB se ativo
+        mutableStateOf(if (config.vinPrefixoVB) "VB" else "")
+    }
+    var status by remember { mutableStateOf(Status.SEM_STATUS) }
     var motivoSel by remember { mutableStateOf(Motivo.DEMERITO_ABERTO.texto) }
     var motivoTexto by remember { mutableStateOf("") }
     // Já seleciona o intervalo pela hora do celular (ex.: 13:45 -> "13:00").
@@ -513,14 +517,14 @@ private fun FormularioRegistro(
     val capturarFotoVin = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture()
     ) { sucesso ->
-        if (sucesso && fotoTempUriVin != null && fotos.size < 3) {
+        if (sucesso && fotoTempUriVin != null && fotos.size < 6) {
             fotos.add(fotoTempUriVin.toString())
             fotoTempUriVin = null
         }
     }
 
     fun lancarCameraPorVin() {
-        if (fotos.size < 3) {
+        if (fotos.size < 6) {
             val file = java.io.File(context.cacheDir, "foto_${System.currentTimeMillis()}.jpg")
             val uri = FileProvider.getUriForFile(
                 context, "${context.packageName}.fileprovider", file
@@ -534,7 +538,7 @@ private fun FormularioRegistro(
         ActivityResultContracts.OpenMultipleDocuments()
     ) { uris ->
         uris.forEach { uri ->
-            if (fotos.size < 3) {
+            if (fotos.size < 6) {
                 try {
                     context.contentResolver.takePersistableUriPermission(
                         uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
@@ -543,6 +547,11 @@ private fun FormularioRegistro(
                 fotos.add(uri.toString())
             }
         }
+    }
+
+    LaunchedEffect(vin) {
+        // Salva o VIN temporário quando digita
+        persistir(vin)
     }
 
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -562,7 +571,7 @@ private fun FormularioRegistro(
                         if (ints.isNotEmpty()) {
                             status = Status.NEGADO
                             motivoSel = MOTIVO_OUTRO
-                            motivoTexto = "[Retornou para o túnel de liberação ${ints.joinToString(", ")}]"
+                            motivoTexto = "[Passou pelo túnel de liberação às ${ints.joinToString(", ")}]"
                         }
                     }
                 },
@@ -619,7 +628,7 @@ private fun FormularioRegistro(
                 onSelecionar = { intervalo = it }
             )
 
-            // Fotos (até 3 por VIN)
+            // Fotos (até 6 por VIN)
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -627,7 +636,7 @@ private fun FormularioRegistro(
             ) {
                 OutlinedButton(
                     onClick = { lancarCameraPorVin() },
-                    enabled = fotos.size < 3,
+                    enabled = fotos.size < 6,
                     modifier = Modifier.weight(1f)
                 ) {
                     Icon(Icons.Filled.PhotoCamera, contentDescription = null)
@@ -636,7 +645,7 @@ private fun FormularioRegistro(
                 }
                 OutlinedButton(
                     onClick = { seletorFotos.launch(arrayOf("image/*")) },
-                    enabled = fotos.size < 3,
+                    enabled = fotos.size < 6,
                     modifier = Modifier.weight(1f)
                 ) {
                     Icon(Icons.Filled.Add, contentDescription = null)
@@ -764,7 +773,10 @@ private fun GrupoIntervalo(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(
                     checked = incluir,
-                    onCheckedChange = { incluirMeta[intervalo] = it }
+                    onCheckedChange = {
+                        incluirMeta[intervalo] = it
+                        persistir()
+                    }
                 )
                 Text("Incluir linha da meta na mensagem")
             }
@@ -851,7 +863,7 @@ private fun EditarRegistroDialog(
         ActivityResultContracts.OpenMultipleDocuments()
     ) { uris ->
         uris.forEach { uri ->
-            if (fotos.size < 3) {
+            if (fotos.size < 6) {
                 try {
                     context.contentResolver.takePersistableUriPermission(
                         uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
@@ -911,12 +923,12 @@ private fun EditarRegistroDialog(
                 ) {
                     OutlinedButton(
                         onClick = { seletorFotos.launch(arrayOf("image/*")) },
-                        enabled = fotos.size < 3,
+                        enabled = fotos.size < 6,
                         modifier = Modifier.weight(1f)
                     ) {
                         Icon(Icons.Filled.Add, contentDescription = null)
                         Spacer(Modifier.width(4.dp))
-                        Text("Fotos ${fotos.size}/3")
+                        Text("Fotos ${fotos.size}/6")
                     }
                     if (fotos.isNotEmpty()) {
                         TextButton(onClick = { fotos.clear() }) { Text("Limpar") }

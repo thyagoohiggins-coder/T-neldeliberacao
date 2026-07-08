@@ -97,6 +97,7 @@ fun TunelApp() {
     val incluirMeta = remember { mutableStateMapOf<String, Boolean>() }
     var seq by remember { mutableStateOf(0L) }
     var config by remember { mutableStateOf(Configuracao()) }
+    var vinSalvo by remember { mutableStateOf<String?>(null) }
     val fotosGlobais = remember { mutableStateListOf<String>() }
 
     var menuAberto by remember { mutableStateOf(false) }
@@ -153,6 +154,7 @@ fun TunelApp() {
         registros.addAll(e.registros)
         seq = e.seq
         incluirMeta.putAll(e.incluirMeta)
+        vinSalvo = e.vinTemporario
         config = configRepo.carregar()
         if (config.vibracaoAtivada) Lembretes.agendar(context, config.vibracaoSegundos)
         // Checagem silenciosa de atualização ao abrir.
@@ -223,6 +225,8 @@ fun TunelApp() {
                 FormularioRegistro(
                     config = config,
                     registrosExistentes = registros,
+                    vinSalvo = vinSalvo,
+                    onVinDigitado = { persistir(it) },
                     onAdicionar = { vin, status, motivo, motivoTexto, intervalo, fotos ->
                         seq += 1
                         registros.add(Registro(vin, status, motivo, motivoTexto, intervalo, seq, fotos))
@@ -494,6 +498,8 @@ private fun LinhaSwitch(rotulo: String, valor: Boolean, onMudar: (Boolean) -> Un
 private fun FormularioRegistro(
     config: Configuracao,
     registrosExistentes: List<Registro>,
+    vinSalvo: String?,
+    onVinDigitado: (String) -> Unit,
     onAdicionar: (String, Status, Motivo?, String?, String, List<String>) -> Unit
 ) {
     val context = LocalContext.current
@@ -501,6 +507,14 @@ private fun FormularioRegistro(
     var vin by remember(config.vinPrefixoVB) {
         // Recupera VIN temporário salvo, ou começa com prefixo VB se ativo
         mutableStateOf(if (config.vinPrefixoVB) "VB" else "")
+    }
+    // Ao carregar o VIN salvo do disco pela 1ª vez, preenche a caixa de texto.
+    var vinRestaurado by remember { mutableStateOf(false) }
+    LaunchedEffect(vinSalvo) {
+        if (!vinRestaurado && !vinSalvo.isNullOrBlank()) {
+            vin = vinSalvo
+            vinRestaurado = true
+        }
     }
     var status by remember { mutableStateOf(Status.SEM_STATUS) }
     var motivoSel by remember { mutableStateOf(Motivo.DEMERITO_ABERTO.texto) }
@@ -551,7 +565,7 @@ private fun FormularioRegistro(
 
     LaunchedEffect(vin) {
         // Salva o VIN temporário quando digita
-        persistir(vin)
+        onVinDigitado(vin)
     }
 
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -775,7 +789,7 @@ private fun GrupoIntervalo(
                     checked = incluir,
                     onCheckedChange = {
                         incluirMeta[intervalo] = it
-                        persistir()
+                        onMudou()
                     }
                 )
                 Text("Incluir linha da meta na mensagem")

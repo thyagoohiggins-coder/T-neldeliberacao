@@ -505,6 +505,18 @@ private fun FormularioRegistro(
     }
     val fotos = remember { mutableStateListOf<String>() }
 
+    val capturarFoto = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        if (bitmap != null && fotos.size < 3) {
+            val file = java.io.File(context.cacheDir, "foto_${System.currentTimeMillis()}.png")
+            file.outputStream().use { out ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+            }
+            fotos.add(file.toURI().toString())
+        }
+    }
+
     val seletorFotos = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments()
     ) { uris ->
@@ -597,20 +609,29 @@ private fun FormularioRegistro(
             // Fotos (até 3 por VIN)
             Row(
                 Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                OutlinedButton(
+                    onClick = { capturarFoto.launch(null) },
+                    enabled = fotos.size < 3,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Filled.PhotoCamera, contentDescription = null)
+                    Spacer(Modifier.width(2.dp))
+                    Text("Câmera")
+                }
                 OutlinedButton(
                     onClick = { seletorFotos.launch(arrayOf("image/*")) },
                     enabled = fotos.size < 3,
                     modifier = Modifier.weight(1f)
                 ) {
                     Icon(Icons.Filled.Add, contentDescription = null)
-                    Spacer(Modifier.width(4.dp))
-                    Text("Fotos ${fotos.size}/3")
+                    Spacer(Modifier.width(2.dp))
+                    Text("Galeria (${fotos.size}/3)")
                 }
                 if (fotos.isNotEmpty()) {
-                    TextButton(onClick = { fotos.clear() }) { Text("Limpar fotos") }
+                    TextButton(onClick = { fotos.clear() }) { Text("Limpar") }
                 }
             }
 

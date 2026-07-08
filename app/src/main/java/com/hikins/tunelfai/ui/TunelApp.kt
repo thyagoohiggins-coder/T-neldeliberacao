@@ -279,7 +279,10 @@ fun TunelApp() {
                                 val texto = Formatador.negadosDeTodos(registros, config)
                                 if (texto.isBlank())
                                     Toast.makeText(context, "Nenhum VIN negado.", Toast.LENGTH_SHORT).show()
-                                else enviarWhatsApp(context, texto)
+                                else enviarWhatsApp(
+                                    context, texto,
+                                    registros.filter { it.status == Status.NEGADO }.flatMap { it.fotos }
+                                )
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -727,7 +730,7 @@ private fun GrupoIntervalo(
             Button(
                 onClick = {
                     val texto = Formatador.intervalo(intervalo, doIntervalo, incluir, config)
-                    enviarWhatsApp(context, texto)
+                    enviarWhatsApp(context, texto, doIntervalo.flatMap { it.fotos })
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -747,7 +750,10 @@ private fun GrupoIntervalo(
                         val texto = Formatador.intervalo(intervalo, doIntervalo, incluir, config, somenteNegado = true)
                         if (texto.isBlank())
                             Toast.makeText(context, "Nenhum VIN negado neste intervalo.", Toast.LENGTH_SHORT).show()
-                        else enviarWhatsApp(context, texto)
+                        else enviarWhatsApp(
+                            context, texto,
+                            doIntervalo.filter { it.status == Status.NEGADO }.flatMap { it.fotos }
+                        )
                     },
                     modifier = Modifier.weight(1f)
                 ) {

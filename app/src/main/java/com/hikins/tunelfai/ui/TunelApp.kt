@@ -513,7 +513,10 @@ private fun FormularioRegistro(
             file.outputStream().use { out ->
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
             }
-            fotos.add(file.toURI().toString())
+            val uri = FileProvider.getUriForFile(
+                context, "${context.packageName}.fileprovider", file
+            )
+            fotos.add(uri.toString())
         }
     }
 

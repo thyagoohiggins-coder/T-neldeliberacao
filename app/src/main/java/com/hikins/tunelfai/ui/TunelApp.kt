@@ -18,7 +18,6 @@ import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -74,7 +73,6 @@ fun TunelApp() {
 
     val registros = remember { mutableStateListOf<Registro>() }
     val metas = remember { mutableStateMapOf<String, MetaInput>() }
-    val incluirMeta = remember { mutableStateMapOf<String, Boolean>() }
     var seq by remember { mutableStateOf(0L) }
 
     var menuAberto by remember { mutableStateOf(false) }
@@ -169,7 +167,6 @@ fun TunelApp() {
                     intervalo = intervalo,
                     registros = registros,
                     metas = metas,
-                    incluirMeta = incluirMeta,
                     onMudou = { persistir() }
                 )
             }
@@ -181,12 +178,12 @@ fun TunelApp() {
                         Text("Resumo total", fontWeight = FontWeight.Bold)
                         Spacer(Modifier.width(0.dp))
                         Text(
-                            Formatador.total(registros, metas),
+                            Formatador.total(metas),
                             fontFamily = FontFamily.Monospace,
                             modifier = Modifier.padding(vertical = 8.dp)
                         )
                         Button(
-                            onClick = { enviarWhatsApp(context, Formatador.total(registros, metas)) },
+                            onClick = { enviarWhatsApp(context, Formatador.total(metas)) },
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Icon(Icons.Filled.Send, contentDescription = null)
@@ -207,7 +204,7 @@ fun TunelApp() {
             text = { Text("Isso remove todos os veículos e estatísticas do dia. Não dá para desfazer.") },
             confirmButton = {
                 TextButton(onClick = {
-                    registros.clear(); metas.clear(); incluirMeta.clear(); seq = 0
+                    registros.clear(); metas.clear(); seq = 0
                     persistir()
                     confirmarLimpar = false
                 }) { Text("Limpar") }
@@ -320,13 +317,11 @@ private fun GrupoIntervalo(
     intervalo: String,
     registros: SnapshotStateList<Registro>,
     metas: SnapshotStateMap<String, MetaInput>,
-    incluirMeta: SnapshotStateMap<String, Boolean>,
     onMudou: () -> Unit
 ) {
     val context = LocalContext.current
     val doIntervalo = registros.filter { it.intervalo == intervalo }.sortedBy { it.ordem }
     val meta = metas[intervalo] ?: MetaInput()
-    val incluir = incluirMeta[intervalo] ?: true
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp)) {
@@ -391,17 +386,9 @@ private fun GrupoIntervalo(
                 }
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(
-                    checked = incluir,
-                    onCheckedChange = { incluirMeta[intervalo] = it }
-                )
-                Text("Incluir linha da meta na mensagem")
-            }
-
             Button(
                 onClick = {
-                    val texto = Formatador.intervalo(intervalo, doIntervalo, incluir, meta)
+                    val texto = Formatador.intervalo(intervalo, meta)
                     enviarWhatsApp(context, texto)
                 },
                 modifier = Modifier.fillMaxWidth()

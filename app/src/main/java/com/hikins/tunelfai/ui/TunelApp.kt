@@ -218,7 +218,7 @@ fun TunelApp() {
             item {
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp)) {
-                        Text("Resumo total", fontWeight = FontWeight.Bold)
+                        Text("TOTAL", fontWeight = FontWeight.Bold, color = CorMeta)
                         PainelEstatistica(Formatador.estatisticaTotal(registros))
                         Button(
                             onClick = { enviarWhatsApp(context, Formatador.total(registros)) },

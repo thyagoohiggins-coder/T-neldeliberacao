@@ -17,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
@@ -24,6 +25,8 @@ import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Surface
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -97,6 +100,10 @@ fun TunelApp() {
     var confirmarLimpar by remember { mutableStateOf(false) }
     var mostrarConfig by remember { mutableStateOf(false) }
     var editando by remember { mutableStateOf<Registro?>(null) }
+    // Seleção múltipla (pela "ordem" de cada registro) para mover/excluir em grupo.
+    val selecionados = remember { mutableStateListOf<Long>() }
+    var escolherDestino by remember { mutableStateOf(false) }
+    var confirmarExcluirSel by remember { mutableStateOf(false) }
     var info by remember { mutableStateOf<InfoAtualizacao?>(null) }
     var mostrarDialogoUpdate by remember { mutableStateOf(false) }
 
@@ -176,6 +183,27 @@ fun TunelApp() {
                     }
                 }
             )
+        },
+        bottomBar = {
+            if (selecionados.isNotEmpty()) {
+                Surface(tonalElevation = 6.dp) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = { selecionados.clear() }) {
+                            Icon(Icons.Filled.Close, contentDescription = "Cancelar seleção")
+                        }
+                        Text("${selecionados.size} selecionado(s)", modifier = Modifier.weight(1f))
+                        TextButton(onClick = { escolherDestino = true }) { Text("Mover") }
+                        TextButton(onClick = { confirmarExcluirSel = true }) {
+                            Text("Excluir", color = CorVermelho)
+                        }
+                    }
+                }
+            }
         }
     ) { padding ->
         LazyColumn(
@@ -209,8 +237,9 @@ fun TunelApp() {
                 GrupoIntervalo(
                     intervalo = intervalo,
                     registros = registros,
+                    selecionados = selecionados,
                     onEditar = { editando = it },
-                    onExcluir = { registros.remove(it); persistir() }
+                    onExcluir = { registros.remove(it); selecionados.remove(it.ordem); persistir() }
                 )
             }
 
@@ -255,6 +284,56 @@ fun TunelApp() {
         }
     }
 
+    if (escolherDestino) {
+        AlertDialog(
+            onDismissRequest = { escolherDestino = false },
+            title = { Text("Mover ${selecionados.size} veículo(s) para") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    Intervalos.lista.forEach { destino ->
+                        TextButton(
+                            onClick = {
+                                for (i in registros.indices) {
+                                    if (registros[i].ordem in selecionados) {
+                                        registros[i] = registros[i].copy(intervalo = destino)
+                                    }
+                                }
+                                persistir()
+                                Toast.makeText(context, "${selecionados.size} veículo(s) movido(s) para $destino.",
+                                    Toast.LENGTH_SHORT).show()
+                                selecionados.clear()
+                                escolherDestino = false
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(Formatador.faixa(destino)) }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { escolherDestino = false }) { Text("Cancelar") }
+            }
+        )
+    }
+
+    if (confirmarExcluirSel) {
+        AlertDialog(
+            onDismissRequest = { confirmarExcluirSel = false },
+            title = { Text("Excluir ${selecionados.size} veículo(s)?") },
+            text = { Text("Os VINs selecionados serão removidos. Não dá para desfazer.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    registros.removeAll { it.ordem in selecionados }
+                    selecionados.clear()
+                    persistir()
+                    confirmarExcluirSel = false
+                }) { Text("Excluir", color = CorVermelho) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmarExcluirSel = false }) { Text("Cancelar") }
+            }
+        )
+    }
+
     if (mostrarConfig) {
         AlertDialog(
             onDismissRequest = { mostrarConfig = false },
@@ -297,7 +376,7 @@ fun TunelApp() {
             text = { Text("Isso remove todos os veículos e estatísticas do dia. Não dá para desfazer.") },
             confirmButton = {
                 TextButton(onClick = {
-                    registros.clear(); seq = 0
+                    registros.clear(); selecionados.clear(); seq = 0
                     persistir()
                     confirmarLimpar = false
                 }) { Text("Limpar") }
@@ -493,6 +572,7 @@ private fun ItemEstatistica(rotulo: String, valor: String, cor: Color) {
 private fun GrupoIntervalo(
     intervalo: String,
     registros: List<Registro>,
+    selecionados: MutableList<Long>,
     onEditar: (Registro) -> Unit,
     onExcluir: (Registro) -> Unit
 ) {
@@ -509,6 +589,12 @@ private fun GrupoIntervalo(
                 Text(Formatador.faixa(intervalo), fontWeight = FontWeight.Bold)
                 Text("${doIntervalo.size} veículo(s)")
             }
+            val idsGrupo = doIntervalo.map { it.ordem }
+            val todosMarcados = idsGrupo.isNotEmpty() && selecionados.containsAll(idsGrupo)
+            TextButton(onClick = {
+                if (todosMarcados) selecionados.removeAll(idsGrupo)
+                else selecionados.addAll(idsGrupo.filterNot { it in selecionados })
+            }) { Text(if (todosMarcados) "Desmarcar todos" else "Selecionar todos") }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
             doIntervalo.forEachIndexed { i, r ->
@@ -516,6 +602,12 @@ private fun GrupoIntervalo(
                     Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Checkbox(
+                        checked = r.ordem in selecionados,
+                        onCheckedChange = { marcado ->
+                            if (marcado) selecionados.add(r.ordem) else selecionados.remove(r.ordem)
+                        }
+                    )
                     Column(Modifier.weight(1f)) {
                         Text(
                             "${i + 1}. ${r.vin}",

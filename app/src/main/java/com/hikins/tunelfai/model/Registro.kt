@@ -1,15 +1,17 @@
 package com.hikins.tunelfai.model
 
-/** Status possíveis de um veículo no túnel. */
+/** Status de um veículo no túnel. Sem status (null) = "Fazendo Inspeção 360" (não contabiliza). */
 enum class Status(val texto: String) {
-    LIBERADO("Liberado"),
-    NEGADO("Negado")
+    APROVADO("🟢 Aprovado"),
+    REPARO("Reparo")
 }
 
-/** Motivo da negação (só se aplica quando NEGADO). */
-enum class Motivo(val texto: String) {
-    DEMERITO_ABERTO("Demérito em aberto"),
-    REPARO_INADEQUADO("Reparo Inadequado")
+/** Modelos e cores disponíveis (opcionais, só para identificar o carro no app). */
+object Catalogo {
+    val modelos = listOf(
+        "Uni-T", "CS55", "CS75", "Tiggo 7", "Tiggo 7 Ice Low", "Tiggo 8 Ice", "Tiggo 5 Ice Low"
+    )
+    val cores = listOf("Cinza", "Branco", "Preto", "Azul")
 }
 
 /**
@@ -18,8 +20,20 @@ enum class Motivo(val texto: String) {
  */
 data class Registro(
     val vin: String,
-    val status: Status,
-    val motivo: Motivo?,      // null quando LIBERADO
+    val modelo: String?,
+    val cor: String?,
+    val status: Status?,      // null = Fazendo Inspeção 360
+    val reparo: String?,      // descrição do reparo (só quando REPARO)
     val intervalo: String,    // ex.: "13:00"
     val ordem: Long
-)
+) {
+    /** Só entra na Produção quem já tem status (Aprovado ou Reparo). */
+    val contabiliza: Boolean get() = status != null
+
+    val textoStatus: String
+        get() = when (status) {
+            null -> "Fazendo Inspeção 360"
+            Status.APROVADO -> Status.APROVADO.texto
+            Status.REPARO -> "Reparo: ${reparo.orEmpty()}"
+        }
+}

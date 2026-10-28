@@ -1,8 +1,10 @@
 package com.hikins.tunelfai.ui
 
+import android.os.Build
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,8 +13,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.AlertDialog
@@ -26,9 +32,12 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -36,33 +45,42 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshots.SnapshotStateList
-import androidx.compose.runtime.snapshots.SnapshotStateMap
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.window.Dialog
+import com.hikins.tunelfai.data.Configuracoes
 import com.hikins.tunelfai.data.EstadoTunel
-import com.hikins.tunelfai.data.MetaInput
 import com.hikins.tunelfai.data.Repositorio
+import com.hikins.tunelfai.lembrete.Lembretes
+import com.hikins.tunelfai.model.Catalogo
 import com.hikins.tunelfai.model.Intervalos
-import com.hikins.tunelfai.model.Motivo
 import com.hikins.tunelfai.model.Registro
 import com.hikins.tunelfai.model.Status
 import com.hikins.tunelfai.update.Atualizador
 import com.hikins.tunelfai.update.InfoAtualizacao
 import kotlinx.coroutines.launch
+import java.util.Calendar
+
+private val CorMeta = Color(0xFF64B5F6)
+private val CorVerde = Color(0xFF66BB6A)
+private val CorVermelho = Color(0xFFEF5350)
+private val CorReparo = Color(0xFFFFB74D)
+private val CorInspecao = Color(0xFFB0BEC5)
+
+private const val NENHUM = "—"
+private const val AUTOMATICO = "Automático"
+private const val TXT_INSPECAO = "Em branco (Fazendo Inspeção 360)"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,25 +88,41 @@ fun TunelApp() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val repo = remember { Repositorio(context) }
+    val config = remember { Configuracoes(context) }
 
     val registros = remember { mutableStateListOf<Registro>() }
-    val metas = remember { mutableStateMapOf<String, MetaInput>() }
     var seq by remember { mutableStateOf(0L) }
 
     var menuAberto by remember { mutableStateOf(false) }
     var confirmarLimpar by remember { mutableStateOf(false) }
+    var mostrarConfig by remember { mutableStateOf(false) }
+    var editando by remember { mutableStateOf<Registro?>(null) }
     var info by remember { mutableStateOf<InfoAtualizacao?>(null) }
     var mostrarDialogoUpdate by remember { mutableStateOf(false) }
 
+    var adiantar by remember { mutableStateOf(config.adiantarIntervalo) }
+    var lembretes by remember { mutableStateOf(config.lembretes) }
+
+    val pedirNotificacao = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { ok ->
+        if (!ok) {
+            lembretes = false; config.lembretes = false
+            Toast.makeText(context, "Sem permissão de notificação, os lembretes ficam desligados.",
+                Toast.LENGTH_LONG).show()
+        }
+        Lembretes.atualizar(context)
+    }
+
     fun persistir() {
-        repo.salvar(EstadoTunel(registros.toList(), metas.toMap(), seq))
+        repo.salvar(EstadoTunel(registros.toList(), seq))
     }
 
     LaunchedEffect(Unit) {
         val e = repo.carregar()
         registros.addAll(e.registros)
-        metas.putAll(e.metas)
         seq = e.seq
+        Lembretes.atualizar(context)
         // Checagem silenciosa de atualização ao abrir.
         val r = Atualizador.verificar(context)
         if (r != null && r.temNova) {
@@ -104,7 +138,7 @@ fun TunelApp() {
                     Column {
                         Text("Hora a Hora Túnel FAI", fontWeight = FontWeight.Bold)
                         Text("v${Atualizador.versaoAtual(context)}",
-                            style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
+                            style = MaterialTheme.typography.labelSmall)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(),
@@ -113,6 +147,10 @@ fun TunelApp() {
                         Icon(Icons.Filled.MoreVert, contentDescription = "Menu")
                     }
                     DropdownMenu(expanded = menuAberto, onDismissRequest = { menuAberto = false }) {
+                        DropdownMenuItem(
+                            text = { Text("Configurações") },
+                            onClick = { menuAberto = false; mostrarConfig = true }
+                        )
                         DropdownMenuItem(
                             text = { Text("Verificar atualização") },
                             onClick = {
@@ -150,14 +188,19 @@ fun TunelApp() {
 
             // Formulário de registro
             item {
-                FormularioRegistro(
-                    onAdicionar = { vin, status, motivo, intervalo ->
-                        seq += 1
-                        registros.add(Registro(vin, status, motivo, intervalo, seq))
-                        persistir()
-                        Toast.makeText(context, "Veículo adicionado.", Toast.LENGTH_SHORT).show()
-                    }
-                )
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    FormVeiculo(
+                        inicial = null,
+                        adiantar = adiantar,
+                        onSalvar = { r ->
+                            seq += 1
+                            registros.add(r.copy(ordem = seq))
+                            persistir()
+                            Toast.makeText(context, "Veículo adicionado no intervalo ${r.intervalo}.",
+                                Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                }
             }
 
             // Intervalos presentes, em ordem decrescente (15:00 no topo)
@@ -166,8 +209,8 @@ fun TunelApp() {
                 GrupoIntervalo(
                     intervalo = intervalo,
                     registros = registros,
-                    metas = metas,
-                    onMudou = { persistir() }
+                    onEditar = { editando = it },
+                    onExcluir = { registros.remove(it); persistir() }
                 )
             }
 
@@ -176,14 +219,9 @@ fun TunelApp() {
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp)) {
                         Text("Resumo total", fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.width(0.dp))
-                        Text(
-                            Formatador.total(metas),
-                            fontFamily = FontFamily.Monospace,
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        )
+                        PainelEstatistica(Formatador.estatisticaTotal(registros))
                         Button(
-                            onClick = { enviarWhatsApp(context, Formatador.total(metas)) },
+                            onClick = { enviarWhatsApp(context, Formatador.total(registros)) },
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Icon(Icons.Filled.Send, contentDescription = null)
@@ -197,6 +235,61 @@ fun TunelApp() {
         }
     }
 
+    editando?.let { atual ->
+        Dialog(onDismissRequest = { editando = null }) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    FormVeiculo(
+                        inicial = atual,
+                        adiantar = adiantar,
+                        onSalvar = { novo ->
+                            val i = registros.indexOfFirst { it.ordem == atual.ordem }
+                            if (i >= 0) registros[i] = novo.copy(ordem = atual.ordem)
+                            persistir()
+                            editando = null
+                        },
+                        onCancelar = { editando = null }
+                    )
+                }
+            }
+        }
+    }
+
+    if (mostrarConfig) {
+        AlertDialog(
+            onDismissRequest = { mostrarConfig = false },
+            title = { Text("Configurações") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    LinhaSwitch(
+                        titulo = "Adiantar intervalo",
+                        descricao = "Faltando ${Intervalos.MINUTOS_ADIANTAR} min ou menos para o próximo " +
+                            "intervalo, o carro já vai para o intervalo seguinte.",
+                        marcado = adiantar,
+                        onMudar = { adiantar = it; config.adiantarIntervalo = it }
+                    )
+                    LinhaSwitch(
+                        titulo = "Lembrete de fechamento",
+                        descricao = "Notifica 15 min antes de cada intervalo (06:45 até 14:45) " +
+                            "e às 15:35 no intervalo das 15:00.",
+                        marcado = lembretes,
+                        onMudar = {
+                            lembretes = it; config.lembretes = it
+                            if (it && Build.VERSION.SDK_INT >= 33) {
+                                pedirNotificacao.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                            } else {
+                                Lembretes.atualizar(context)
+                            }
+                        }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { mostrarConfig = false }) { Text("Fechar") }
+            }
+        )
+    }
+
     if (confirmarLimpar) {
         AlertDialog(
             onDismissRequest = { confirmarLimpar = false },
@@ -204,7 +297,7 @@ fun TunelApp() {
             text = { Text("Isso remove todos os veículos e estatísticas do dia. Não dá para desfazer.") },
             confirmButton = {
                 TextButton(onClick = {
-                    registros.clear(); metas.clear(); seq = 0
+                    registros.clear(); seq = 0
                     persistir()
                     confirmarLimpar = false
                 }) { Text("Limpar") }
@@ -242,86 +335,169 @@ fun TunelApp() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun FormularioRegistro(
-    onAdicionar: (String, Status, Motivo?, String) -> Unit
+private fun LinhaSwitch(titulo: String, descricao: String, marcado: Boolean, onMudar: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(titulo, fontWeight = FontWeight.Bold)
+            Text(descricao, style = MaterialTheme.typography.bodySmall)
+        }
+        Spacer(Modifier.width(8.dp))
+        Switch(checked = marcado, onCheckedChange = onMudar)
+    }
+}
+
+/**
+ * Formulário de veículo. [inicial] null = novo registro (intervalo pode ser Automático);
+ * senão edita o registro existente. [onSalvar] recebe o registro (ordem é ajustada por quem chama).
+ */
+@Composable
+private fun FormVeiculo(
+    inicial: Registro?,
+    adiantar: Boolean,
+    onSalvar: (Registro) -> Unit,
+    onCancelar: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
-    var vin by remember { mutableStateOf("") }
-    var status by remember { mutableStateOf(Status.LIBERADO) }
-    var motivo by remember { mutableStateOf(Motivo.DEMERITO_ABERTO) }
-    var intervalo by remember { mutableStateOf<String?>(null) }
+    var vin by remember { mutableStateOf(inicial?.vin ?: "") }
+    var modelo by remember { mutableStateOf(inicial?.modelo) }
+    var cor by remember { mutableStateOf(inicial?.cor) }
+    var status by remember { mutableStateOf(inicial?.status) }
+    var reparo by remember { mutableStateOf(inicial?.reparo ?: "") }
+    var intervalo by remember { mutableStateOf(inicial?.intervalo ?: AUTOMATICO) }
 
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Registrar veículo", fontWeight = FontWeight.Bold)
+    fun intervaloAgora(): String {
+        val c = Calendar.getInstance()
+        return Intervalos.atual(c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), adiantar)
+    }
 
+    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(if (inicial == null) "Registrar veículo" else "Editar veículo", fontWeight = FontWeight.Bold)
+
+        OutlinedTextField(
+            value = vin,
+            onValueChange = { vin = it.uppercase() },
+            label = { Text("VIN") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        DropdownSelecao(
+            rotulo = "Modelo (opcional)",
+            valor = modelo ?: NENHUM,
+            opcoes = listOf(NENHUM) + Catalogo.modelos,
+            onSelecionar = { modelo = it.takeIf { m -> m != NENHUM } }
+        )
+
+        DropdownSelecao(
+            rotulo = "Cor (opcional)",
+            valor = cor ?: NENHUM,
+            opcoes = listOf(NENHUM) + Catalogo.cores,
+            onSelecionar = { cor = it.takeIf { c -> c != NENHUM } }
+        )
+
+        DropdownSelecao(
+            rotulo = "Status",
+            valor = status?.texto ?: TXT_INSPECAO,
+            opcoes = listOf(TXT_INSPECAO) + Status.entries.map { it.texto },
+            onSelecionar = { txt -> status = Status.entries.firstOrNull { it.texto == txt } }
+        )
+
+        if (status == Status.REPARO) {
             OutlinedTextField(
-                value = vin,
-                onValueChange = { vin = it.uppercase() },
-                label = { Text("VIN") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
+                value = reparo,
+                onValueChange = { reparo = it },
+                label = { Text("Reparo") },
+                supportingText = { Text("Sem reparo escrito, fica como Fazendo Inspeção 360.") },
                 modifier = Modifier.fillMaxWidth()
             )
+        }
 
-            // Status
-            DropdownSelecao(
-                rotulo = "Status",
-                valor = status.texto,
-                opcoes = Status.entries.map { it.texto },
-                onSelecionar = { txt -> status = Status.entries.first { it.texto == txt } }
-            )
+        DropdownSelecao(
+            rotulo = "Intervalo",
+            valor = if (intervalo == AUTOMATICO) "$AUTOMATICO (agora: ${intervaloAgora()})" else intervalo,
+            opcoes = (if (inicial == null) listOf(AUTOMATICO) else emptyList()) + Intervalos.lista,
+            onSelecionar = { intervalo = it }
+        )
 
-            // Motivo só aparece quando Negado
-            if (status == Status.NEGADO) {
-                DropdownSelecao(
-                    rotulo = "Motivo",
-                    valor = motivo.texto,
-                    opcoes = Motivo.entries.map { it.texto },
-                    onSelecionar = { txt -> motivo = Motivo.entries.first { it.texto == txt } }
-                )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (onCancelar != null) {
+                OutlinedButton(onClick = onCancelar, modifier = Modifier.weight(1f)) { Text("Cancelar") }
             }
-
-            // Intervalo
-            DropdownSelecao(
-                rotulo = "Intervalo",
-                valor = intervalo ?: "Selecione",
-                opcoes = Intervalos.lista,
-                onSelecionar = { intervalo = it }
-            )
-
             Button(
                 onClick = {
                     val v = vin.trim()
-                    when {
-                        v.isBlank() -> Toast.makeText(context, "Digite o VIN.", Toast.LENGTH_SHORT).show()
-                        intervalo == null -> Toast.makeText(context, "Escolha o intervalo.", Toast.LENGTH_SHORT).show()
-                        else -> {
-                            val m = if (status == Status.NEGADO) motivo else null
-                            onAdicionar(v, status, m, intervalo!!)
-                            vin = ""
-                        }
+                    if (v.isBlank()) {
+                        Toast.makeText(context, "Digite o VIN.", Toast.LENGTH_SHORT).show()
+                    } else {
+                    val rep = reparo.trim()
+                    // Reparo sem descrição = Fazendo Inspeção 360 (não contabiliza).
+                    val st = if (status == Status.REPARO && rep.isEmpty()) null else status
+                    onSalvar(
+                        Registro(
+                            vin = v,
+                            modelo = modelo,
+                            cor = cor,
+                            status = st,
+                            reparo = if (st == Status.REPARO) rep else null,
+                            intervalo = if (intervalo == AUTOMATICO) intervaloAgora() else intervalo,
+                            ordem = inicial?.ordem ?: 0
+                        )
+                    )
+                    if (inicial == null) {
+                        vin = ""; modelo = null; cor = null; status = null; reparo = ""
+                    }
                     }
                 },
-                modifier = Modifier.fillMaxWidth()
-            ) { Text("Adicionar") }
+                modifier = Modifier.weight(1f)
+            ) { Text(if (inicial == null) "Adicionar" else "Salvar") }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** Meta (azul), Produção, Aprovado (verde) e Diferença (verde se bateu/passou, vermelho se negativa). */
+@Composable
+private fun PainelEstatistica(e: Estatistica) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        ItemEstatistica("Meta", e.meta.toString(), CorMeta)
+        ItemEstatistica("Produção", e.prod?.toString() ?: "-", MaterialTheme.colorScheme.onSurface)
+        ItemEstatistica("Aprovado", e.aprov?.toString() ?: "-", CorVerde)
+        val dif = e.dif
+        ItemEstatistica(
+            "Diferença",
+            dif?.toString() ?: "-",
+            when {
+                dif == null -> MaterialTheme.colorScheme.onSurface
+                dif < 0 -> CorVermelho
+                else -> CorVerde
+            }
+        )
+    }
+}
+
+@Composable
+private fun ItemEstatistica(rotulo: String, valor: String, cor: Color) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(rotulo, style = MaterialTheme.typography.labelSmall)
+        Text(valor, color = cor, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+    }
+}
+
 @Composable
 private fun GrupoIntervalo(
     intervalo: String,
-    registros: SnapshotStateList<Registro>,
-    metas: SnapshotStateMap<String, MetaInput>,
-    onMudou: () -> Unit
+    registros: List<Registro>,
+    onEditar: (Registro) -> Unit,
+    onExcluir: (Registro) -> Unit
 ) {
     val context = LocalContext.current
     val doIntervalo = registros.filter { it.intervalo == intervalo }.sortedBy { it.ordem }
-    val meta = metas[intervalo] ?: MetaInput()
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp)) {
@@ -330,8 +506,8 @@ private fun GrupoIntervalo(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Intervalo $intervalo", fontWeight = FontWeight.Bold)
-                Text("${doIntervalo.size} veículo(s) • Meta ${Intervalos.metaDe(intervalo)}")
+                Text(Formatador.faixa(intervalo), fontWeight = FontWeight.Bold)
+                Text("${doIntervalo.size} veículo(s)")
             }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
@@ -340,15 +516,31 @@ private fun GrupoIntervalo(
                     Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val motivoTxt = if (r.status == Status.NEGADO && r.motivo != null)
-                        " — ${r.motivo.texto}" else ""
-                    Text(
-                        "${i + 1}. ${r.vin}  [${r.status.texto}$motivoTxt]",
-                        modifier = Modifier.weight(1f),
-                        fontFamily = FontFamily.Monospace,
-                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall
-                    )
-                    IconButton(onClick = { registros.remove(r); onMudou() }) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "${i + 1}. ${r.vin}",
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        val detalhes = listOfNotNull(r.modelo, r.cor).joinToString(" • ")
+                        if (detalhes.isNotEmpty()) {
+                            Text(detalhes, style = MaterialTheme.typography.bodySmall)
+                        }
+                        Text(
+                            r.textoStatus,
+                            color = when (r.status) {
+                                null -> CorInspecao
+                                Status.APROVADO -> CorVerde
+                                Status.REPARO -> CorReparo
+                            },
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    IconButton(onClick = { onEditar(r) }) {
+                        Icon(Icons.Filled.Edit, contentDescription = "Editar")
+                    }
+                    IconButton(onClick = { onExcluir(r) }) {
                         Icon(Icons.Filled.Delete, contentDescription = "Excluir")
                     }
                 }
@@ -356,41 +548,10 @@ private fun GrupoIntervalo(
 
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
-            // Prod / Aprov digitados e Dif calculada
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedTextField(
-                    value = meta.prod,
-                    onValueChange = { metas[intervalo] = meta.copy(prod = it.filter { c -> c.isDigit() }); onMudou() },
-                    label = { Text("Prod") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.weight(1f)
-                )
-                OutlinedTextField(
-                    value = meta.aprov,
-                    onValueChange = { metas[intervalo] = meta.copy(aprov = it.filter { c -> c.isDigit() }); onMudou() },
-                    label = { Text("Aprov") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.weight(1f)
-                )
-                Box(
-                    modifier = Modifier.weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    val prod = meta.prod.toIntOrNull() ?: 0
-                    Text("Dif: ${prod - Intervalos.metaDe(intervalo)}", fontWeight = FontWeight.Bold)
-                }
-            }
+            PainelEstatistica(Formatador.estatistica(intervalo, registros))
 
             Button(
-                onClick = {
-                    val texto = Formatador.intervalo(intervalo, meta)
-                    enviarWhatsApp(context, texto)
-                },
+                onClick = { enviarWhatsApp(context, Formatador.intervalo(intervalo, registros)) },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(Icons.Filled.Send, contentDescription = null)

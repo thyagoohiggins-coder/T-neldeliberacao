@@ -6,18 +6,10 @@ enum class Status(val texto: String) {
     REPARO("Reparo")
 }
 
-/** VIN curto a partir do código de barras do chassi. */
+/** VIN a partir do código de barras do chassi. */
 object Vin {
-    /**
-     * "95PLDL61DVB007163" -> "VB007163": do chassi completo (17) usa os 8 últimos caracteres.
-     * Outros formatos: pega a partir do último "VB"; sem isso, devolve o texto limpo.
-     */
-    fun doCodigo(lido: String): String {
-        val limpo = lido.uppercase().filter { it.isLetterOrDigit() }
-        if (limpo.length >= 17) return limpo.takeLast(8)
-        val i = limpo.lastIndexOf("VB")
-        return if (i >= 0) limpo.substring(i) else limpo
-    }
+    /** Usa tudo o que foi lido no código, só em maiúsculas e sem espaços/símbolos. */
+    fun limpar(lido: String): String = lido.uppercase().filter { it.isLetterOrDigit() }
 }
 
 /** Modelos e cores disponíveis (opcionais, só para identificar o carro no app). */

@@ -1123,7 +1123,8 @@ private fun FolhaVeiculo(
 ) {
     val context = LocalContext.current
     // Todo VIN começa com "VB": o prefixo já vem escrito e o usuário digita só o resto.
-    val usarPrefixo = remember { inicial?.vin?.startsWith(PREFIXO_VIN) ?: true }
+    // Lido pelo código de barras: o prefixo some e o VIN fica exatamente como o código.
+    var usarPrefixo by remember { mutableStateOf(inicial?.vin?.startsWith(PREFIXO_VIN) ?: true) }
     var vin by remember {
         mutableStateOf(inicial?.vin?.let { if (usarPrefixo) it.removePrefix(PREFIXO_VIN) else it } ?: "")
     }
@@ -1228,11 +1229,12 @@ private fun FolhaVeiculo(
                             .build()
                         GmsBarcodeScanning.getClient(context, opcoes).startScan()
                             .addOnSuccessListener { codigo ->
-                                val lido = Vin.doCodigo(codigo.rawValue.orEmpty())
+                                val lido = Vin.limpar(codigo.rawValue.orEmpty())
                                 if (lido.isEmpty()) {
                                     Toast.makeText(context, "Código vazio, tente de novo.", Toast.LENGTH_SHORT).show()
                                 } else {
-                                    vin = if (usarPrefixo) lido.removePrefix(PREFIXO_VIN) else lido
+                                    usarPrefixo = false
+                                    vin = lido
                                     Toast.makeText(context, "VIN lido: $lido", Toast.LENGTH_SHORT).show()
                                 }
                             }

@@ -14,9 +14,13 @@ object Formatador {
 
     private const val CABECALHO = "_FECHAMENTO TÚNEL_"
 
-    /** "06:00" -> "06:00 ÀS 07:00". */
+    /** Fim do turno: o último intervalo vai das 15:00 às 15:48. */
+    private const val FIM_ULTIMO = "15:48"
+
+    /** "06:00" -> "06:00 ÀS 07:00"; "15:00" -> "15:00 ÀS 15:48". */
     fun faixa(intervalo: String): String {
         val hora = intervalo.substringBefore(':').toIntOrNull() ?: return intervalo
+        if (intervalo == Intervalos.lista.last()) return "$intervalo ÀS $FIM_ULTIMO"
         return "%s ÀS %02d:00".format(intervalo, hora + 1)
     }
 

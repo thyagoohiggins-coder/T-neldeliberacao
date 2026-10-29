@@ -116,10 +116,12 @@ private const val AUTOMATICO = "Auto"
 private fun faixaCurta(intervalo: String): String =
     Formatador.faixa(intervalo).replace(" ÀS ", " – ")
 
-/** Intervalo em andamento agora (null fora do turno 06:00–16:00). */
+/** Intervalo em andamento agora (null fora do turno 06:00–15:48). */
 private fun intervaloEmAndamento(c: Calendar): String? {
     val h = c.get(Calendar.HOUR_OF_DAY)
-    return if (h in 6..15) Intervalos.atual(h, c.get(Calendar.MINUTE), false) else null
+    val m = c.get(Calendar.MINUTE)
+    if (h !in 6..15 || (h == 15 && m >= 48)) return null
+    return Intervalos.atual(h, m, false)
 }
 
 private fun corStatus(status: Status?): Color = when (status) {
@@ -820,7 +822,7 @@ private fun LinhaVeiculo(
                         Spacer(Modifier.width(6.dp))
                     }
                     Text(listOfNotNull(r.modelo, r.cor).joinToString(" • "), color = Cores.TextoSuave,
-                        style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                        style = MaterialTheme.typography.bodySmall, maxLines = 2)
                 }
             }
             if (r.status == Status.REPARO && !r.reparo.isNullOrBlank()) {

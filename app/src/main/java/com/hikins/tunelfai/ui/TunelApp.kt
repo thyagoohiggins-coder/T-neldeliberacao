@@ -1403,14 +1403,10 @@ private fun LinhaVeiculo(
                     LogoMarca(marca, 20.dp)
                     Spacer(Modifier.width(6.dp))
                 }
-                // Chassi completo: em destaque só o final a partir de "VB" (ex.: VB003682).
+                // Chassi completo: na lista aparece só o final a partir de "VB" (ex.: VB003682).
                 val curto = vinCurto(r.vin)
                 Text(curto, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 15.sp,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            if (vinCurto(r.vin) != r.vin) {
-                Text(r.vin, fontFamily = FontFamily.Monospace, color = Cores.TextoSuave,
-                    style = MaterialTheme.typography.labelSmall, maxLines = 1)
             }
             if (vezes > 1) {
                 Text("VIN repetido • aparece ${vezes}x", color = Cores.Vermelho,

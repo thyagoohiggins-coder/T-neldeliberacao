@@ -1381,7 +1381,13 @@ private fun FolhaVeiculo(
                                 r.status != Status.REPARO ->
                                     Toast.makeText(context, "Escreva o reparo (NC) antes de enviar.",
                                         Toast.LENGTH_SHORT).show()
-                                else -> enviarWhatsAppComFotos(context, Formatador.negado(r), r.fotos)
+                                else -> {
+                                    // Enviar também salva o veículo na lista (novo ou edição).
+                                    Fotos.apagar((fotosOriginais + fotos).distinct().filter { it !in r.fotos })
+                                    if (!r.responsavel.isNullOrBlank()) configFolha.ultimoResponsavel = r.responsavel
+                                    onSalvar(r)
+                                    enviarWhatsAppComFotos(context, Formatador.negado(r), r.fotos)
+                                }
                             }
                         },
                         shape = RoundedCornerShape(14.dp),
@@ -1395,7 +1401,7 @@ private fun FolhaVeiculo(
                     ) {
                         Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Enviar veículo negado (${fotos.size} foto(s))", fontWeight = FontWeight.SemiBold)
+                        Text("Salvar e enviar veículo negado (${fotos.size} foto(s))", fontWeight = FontWeight.SemiBold)
                     }
                 }
             }

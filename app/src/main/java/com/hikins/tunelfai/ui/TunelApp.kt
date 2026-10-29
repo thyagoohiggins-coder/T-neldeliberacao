@@ -162,6 +162,8 @@ fun TunelApp() {
 
     var adiantar by remember { mutableStateOf(config.adiantarIntervalo) }
     var lembretes by remember { mutableStateOf(config.lembretes) }
+    val bancoReparos = remember { mutableStateListOf<String>().apply { addAll(config.reparos) } }
+    var novoReparo by remember { mutableStateOf("") }
     var agora by remember { mutableStateOf(Calendar.getInstance()) }
 
     val pedirNotificacao = rememberLauncherForActivityResult(
@@ -348,6 +350,7 @@ fun TunelApp() {
         FolhaVeiculo(
             inicial = null,
             adiantar = adiantar,
+            bancoReparos = bancoReparos,
             onFechar = { novoAberto = false },
             onSalvar = { r ->
                 seq += 1
@@ -364,6 +367,7 @@ fun TunelApp() {
         FolhaVeiculo(
             inicial = atual,
             adiantar = adiantar,
+            bancoReparos = bancoReparos,
             onFechar = { editando = null },
             onSalvar = { novo ->
                 val i = registros.indexOfFirst { it.ordem == atual.ordem }
@@ -453,7 +457,9 @@ fun TunelApp() {
             containerColor = Cores.Superficie
         ) {
             Column(
-                Modifier.padding(start = 20.dp, end = 20.dp, bottom = 32.dp),
+                Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(start = 20.dp, end = 20.dp, bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 Text("Configurações", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -478,6 +484,83 @@ fun TunelApp() {
                         }
                     }
                 )
+
+                // Banco de reparos
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Cores.SuperficieAlta)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text("Banco de reparos", fontWeight = FontWeight.SemiBold)
+                    Text("Reparos pré-definidos que aparecem como sugestão ao escrever o reparo de um veículo.",
+                        style = MaterialTheme.typography.bodySmall, color = Cores.TextoSuave)
+                    fun adicionarReparo() {
+                        val t = novoReparo.trim()
+                        if (t.isNotEmpty() && bancoReparos.none { it.equals(t, ignoreCase = true) }) {
+                            bancoReparos.add(t)
+                            config.reparos = bancoReparos.toList()
+                        }
+                        novoReparo = ""
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = novoReparo,
+                            onValueChange = { novoReparo = it },
+                            placeholder = { Text("Novo reparo") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Cores.Azul,
+                                unfocusedBorderColor = Cores.Borda
+                            ),
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Button(
+                            onClick = { adicionarReparo() },
+                            enabled = novoReparo.isNotBlank(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Cores.Azul),
+                            modifier = Modifier.height(52.dp)
+                        ) {
+                            Icon(Icons.Filled.Add, contentDescription = "Adicionar reparo")
+                        }
+                    }
+                    if (bancoReparos.isEmpty()) {
+                        Text("Nenhum reparo cadastrado.", color = Cores.TextoSuave,
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                    bancoReparos.toList().forEach { item ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Cores.Superficie)
+                                .padding(start = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(Cores.Ambar)
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Text(item, modifier = Modifier.weight(1f))
+                            IconButton(onClick = {
+                                bancoReparos.remove(item)
+                                config.reparos = bancoReparos.toList()
+                            }) {
+                                Icon(Icons.Filled.Delete, contentDescription = "Remover reparo",
+                                    tint = Cores.TextoSuave)
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -846,6 +929,7 @@ private fun LinhaVeiculo(
 private fun FolhaVeiculo(
     inicial: Registro?,
     adiantar: Boolean,
+    bancoReparos: List<String>,
     onFechar: () -> Unit,
     onSalvar: (Registro) -> Unit,
     onExcluir: (() -> Unit)? = null
@@ -968,6 +1052,22 @@ private fun FolhaVeiculo(
                         colors = coresCampo,
                         modifier = Modifier.fillMaxWidth()
                     )
+                    val sugestoes = Configuracoes.sugerir(bancoReparos, reparo)
+                    if (sugestoes.isNotEmpty()) {
+                        Spacer(Modifier.height(6.dp))
+                        Text("Sugestões do banco de reparos", color = Cores.TextoSuave,
+                            style = MaterialTheme.typography.labelSmall)
+                        Spacer(Modifier.height(6.dp))
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            sugestoes.forEach { sug ->
+                                Chip(texto = sug, selecionado = false, onClick = { reparo = sug },
+                                    corBolinha = Cores.Ambar)
+                            }
+                        }
+                    }
                 }
             }
 

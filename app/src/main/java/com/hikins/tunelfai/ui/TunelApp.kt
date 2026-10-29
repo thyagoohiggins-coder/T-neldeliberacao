@@ -227,6 +227,8 @@ fun TunelApp() {
     var adiantar by remember { mutableStateOf(config.adiantarIntervalo) }
     var lembretes by remember { mutableStateOf(config.lembretes) }
     var autoModeloCfg by remember { mutableStateOf(config.autoModelo) }
+    var avisoFechamentoCfg by remember { mutableStateOf(config.avisoFechamento) }
+    var mostrarAvisoFechamento by remember { mutableStateOf(false) }
     remember { PreferenciasUi.mostrarLogos = config.mostrarLogos }
     var metasEditadas by remember {
         mutableStateOf(config.metas.also { Intervalos.definirMetas(it) })
@@ -649,6 +651,13 @@ fun TunelApp() {
                     onMudar = { PreferenciasUi.mostrarLogos = it; config.mostrarLogos = it }
                 )
                 LinhaSwitch(
+                    titulo = "Aviso de fechamento às 15:35",
+                    descricao = "A partir das 15:35, ao abrir ou usar o app, aparece no meio da tela " +
+                        "o lembrete para enviar o fechamento do túnel (uma vez por dia).",
+                    marcado = avisoFechamentoCfg,
+                    onMudar = { avisoFechamentoCfg = it; config.avisoFechamento = it }
+                )
+                LinhaSwitch(
                     titulo = "Lembrete de fechamento",
                     descricao = "Notifica 15 min antes de cada intervalo (06:45 até 14:45) " +
                         "e às 15:35 no intervalo das 15:00.",
@@ -918,6 +927,42 @@ fun TunelApp() {
             },
             dismissButton = {
                 TextButton(onClick = { confirmarLimpar = false }) { Text("Cancelar") }
+            }
+        )
+    }
+
+    // Aviso no meio da tela a partir das 15:35 (uma vez por dia), se ativado nas configurações.
+    val hojeTexto = "%tF".format(agora)
+    LaunchedEffect(agora, avisoFechamentoCfg) {
+        val minutos = agora.get(Calendar.HOUR_OF_DAY) * 60 + agora.get(Calendar.MINUTE)
+        if (avisoFechamentoCfg && minutos >= 15 * 60 + 35 && config.avisoFechamentoDia != hojeTexto) {
+            config.avisoFechamentoDia = hojeTexto
+            mostrarAvisoFechamento = true
+        }
+    }
+    if (mostrarAvisoFechamento) {
+        AlertDialog(
+            onDismissRequest = { mostrarAvisoFechamento = false },
+            containerColor = Cores.Superficie,
+            icon = { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, tint = Cores.WhatsApp) },
+            title = { Text("Hora do fechamento", textAlign = TextAlign.Center) },
+            text = {
+                Text(
+                    "Já são 15:35. Que tal enviar o fechamento do túnel no WhatsApp?",
+                    textAlign = TextAlign.Center
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        mostrarAvisoFechamento = false
+                        enviarWhatsApp(context, Formatador.total(registros))
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Cores.WhatsApp, contentColor = Color.White)
+                ) { Text("Enviar fechamento") }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarAvisoFechamento = false }) { Text("Depois") }
             }
         )
     }

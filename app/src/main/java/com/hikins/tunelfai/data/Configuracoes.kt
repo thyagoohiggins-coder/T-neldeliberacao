@@ -53,6 +53,16 @@ class Configuracoes(context: Context) {
         }
         set(v) = prefs.edit().putString("metas", org.json.JSONObject(v as Map<*, *>).toString()).apply()
 
+    /** Às 15:35, mostrar no app o aviso para enviar o fechamento do túnel. */
+    var avisoFechamento: Boolean
+        get() = prefs.getBoolean("aviso_fechamento", true)
+        set(v) = prefs.edit().putBoolean("aviso_fechamento", v).apply()
+
+    /** Dia (yyyy-MM-dd) em que o aviso de fechamento já foi mostrado. */
+    var avisoFechamentoDia: String
+        get() = prefs.getString("aviso_fechamento_dia", "") ?: ""
+        set(v) = prefs.edit().putString("aviso_fechamento_dia", v).apply()
+
     /** Banco de reparos pré-definidos, sugeridos ao escrever o reparo de um veículo. */
     var reparos: List<String>
         get() {

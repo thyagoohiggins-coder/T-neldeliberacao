@@ -73,6 +73,7 @@ object Formatador {
         val linhas = mutableListOf(
             "*$titulo*",
             "",
+            "*Vin:*  ${r.vin}",
             "*Modelo:*  ${r.modelo.orEmpty()}",
             "*Responsável:*  ${r.responsavel.orEmpty()}"
         )

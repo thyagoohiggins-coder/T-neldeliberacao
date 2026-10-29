@@ -55,7 +55,10 @@ class Repositorio(context: Context) {
                     ordem = o.getLong("ordem"),
                     responsavel = o.textoOuNull("responsavel"),
                     fotos = o.optJSONArray("fotos")?.let { f -> (0 until f.length()).map { f.getString(it) } }
-                        ?: emptyList()
+                        ?: emptyList(),
+                    // "motivo" é usado pelos dados antigos (Negado); o texto livre fica em "motivoTexto".
+                    motivo = o.textoOuNull("motivoTexto"),
+                    observacao = o.textoOuNull("observacao")
                 )
             }
 
@@ -81,6 +84,8 @@ class Repositorio(context: Context) {
                     .put("ordem", r.ordem)
                     .put("responsavel", r.responsavel ?: "")
                     .put("fotos", JSONArray(r.fotos))
+                    .put("motivoTexto", r.motivo ?: "")
+                    .put("observacao", r.observacao ?: "")
             )
         }
         raiz.put("registros", arr)

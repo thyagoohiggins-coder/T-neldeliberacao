@@ -63,6 +63,8 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -143,7 +145,9 @@ private data class Rascunho(
     val reparo: String,
     val responsavel: String,
     val fotos: List<String>,
-    val intervalo: String
+    val intervalo: String,
+    val motivo: String = "",
+    val observacao: String = ""
 )
 private const val PREFIXO_VIN = "VB"
 private const val MAX_FOTOS = 4
@@ -165,19 +169,28 @@ private fun corStatus(status: Status?): Color = when (status) {
     null -> Cores.Azul
     Status.APROVADO -> Cores.Verde
     Status.REPARO -> Cores.Vermelho
+    Status.BLOQUEADO -> Cores.Ambar
+    Status.SEPARADO -> Cores.Cinza
 }
 
-/** Ordem na lista: Inspeção 360 no topo, depois Reparo, por último Aprovado. */
+/** Status que têm mensagem própria no WhatsApp (com responsável e fotos). */
+private val STATUS_COM_ENVIO = setOf(Status.REPARO, Status.BLOQUEADO, Status.SEPARADO)
+
+/** Ordem na lista: Inspeção 360 no topo, depois Reparo, Aprovado e, no fim, Bloqueado e Separado. */
 private fun prioridade(status: Status?): Int = when (status) {
     null -> 0
     Status.REPARO -> 1
     Status.APROVADO -> 2
+    Status.BLOQUEADO -> 3
+    Status.SEPARADO -> 4
 }
 
 private fun rotuloStatus(status: Status?): String = when (status) {
     null -> "Inspeção 360"
     Status.APROVADO -> "Aprovado"
     Status.REPARO -> "Reparo"
+    Status.BLOQUEADO -> "Bloqueado"
+    Status.SEPARADO -> "Separado"
 }
 
 @Composable
@@ -1066,6 +1079,65 @@ private fun LogoMarca(marca: Marca, tamanho: androidx.compose.ui.unit.Dp) {
     )
 }
 
+/** Etiqueta "Bloqueado" com cadeado balançando. */
+@Composable
+private fun PilulaBloqueado() {
+    val anim = rememberInfiniteTransition(label = "bloqueado")
+    val angulo by anim.animateFloat(
+        initialValue = -14f, targetValue = 14f,
+        animationSpec = infiniteRepeatable(tween(220), RepeatMode.Reverse), label = "angulo"
+    )
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(50))
+            .background(Cores.Ambar.copy(alpha = 0.16f))
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            Icons.Filled.Lock, contentDescription = null, tint = Cores.Ambar,
+            modifier = Modifier
+                .size(13.dp)
+                .graphicsLayer { rotationZ = angulo }
+        )
+        Spacer(Modifier.width(5.dp))
+        Text("Bloqueado", color = Cores.Ambar, style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold, maxLines = 1)
+    }
+}
+
+/** Uma linha de botões de status (seleção única entre todas as linhas). */
+@Composable
+private fun LinhaStatus(opcoes: List<Status?>, atual: Status?, onEscolher: (Status?) -> Unit) {
+    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+        opcoes.forEachIndexed { i, st ->
+            SegmentedButton(
+                selected = atual == st,
+                onClick = { onEscolher(st) },
+                shape = SegmentedButtonDefaults.itemShape(index = i, count = opcoes.size),
+                colors = SegmentedButtonDefaults.colors(
+                    activeContainerColor = corStatus(st).copy(alpha = 0.2f),
+                    activeContentColor = corStatus(st),
+                    activeBorderColor = corStatus(st),
+                    inactiveContainerColor = Cores.SuperficieAlta,
+                    inactiveContentColor = Cores.TextoSuave,
+                    inactiveBorderColor = Cores.Borda
+                ),
+                icon = {}
+            ) {
+                Text(
+                    when (st) {
+                        Status.APROVADO -> "🟢 Aprovado"
+                        Status.BLOQUEADO -> "🔒 Bloqueado"
+                        else -> rotuloStatus(st)
+                    },
+                    maxLines = 1, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+    }
+}
+
 /** Etiqueta "Inspeção 360" com animação de em andamento (spinner + pulsar). */
 @Composable
 private fun PilulaInspecao() {
@@ -1227,9 +1299,18 @@ private fun LinhaVeiculo(
     onToqueLongo: () -> Unit
 ) {
     val corSt = corStatus(r.status)
+    // Separado: a linha fica "transparente", pulsando devagar.
+    val alfaLinha = if (r.status == Status.SEPARADO) {
+        val anim = rememberInfiniteTransition(label = "separado")
+        anim.animateFloat(
+            initialValue = 0.35f, targetValue = 0.75f,
+            animationSpec = infiniteRepeatable(tween(1400), RepeatMode.Reverse), label = "alfaSeparado"
+        ).value
+    } else 1f
     Row(
         Modifier
             .fillMaxWidth()
+            .alpha(alfaLinha)
             .clip(RoundedCornerShape(14.dp))
             .background(if (selecionado) Cores.AzulEscuro else Cores.SuperficieAlta)
             .border(
@@ -1298,21 +1379,30 @@ private fun LinhaVeiculo(
                 Text(r.reparo, color = Cores.Vermelho, style = MaterialTheme.typography.bodySmall,
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
+            if ((r.status == Status.BLOQUEADO || r.status == Status.SEPARADO) && !r.motivo.isNullOrBlank()) {
+                Text(r.motivo, color = corStatus(r.status), style = MaterialTheme.typography.bodySmall,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
         }
         Spacer(Modifier.width(8.dp))
         Column(horizontalAlignment = Alignment.End) {
-            if (r.status == null) PilulaInspecao() else Pilula(rotuloStatus(r.status), corSt)
-            if (r.status == Status.REPARO && !modoSelecao) {
+            when (r.status) {
+                null -> PilulaInspecao()
+                Status.BLOQUEADO -> PilulaBloqueado()
+                else -> Pilula(rotuloStatus(r.status), corSt)
+            }
+            if (r.status in STATUS_COM_ENVIO && !modoSelecao) {
                 val context = LocalContext.current
                 TextButton(
-                    onClick = { enviarWhatsAppComFotos(context, Formatador.negado(r), r.fotos) },
+                    onClick = { enviarWhatsAppComFotos(context, Formatador.mensagemDe(r).orEmpty(), r.fotos) },
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                     modifier = Modifier.height(32.dp)
                 ) {
                     Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null,
                         tint = Cores.WhatsApp, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text(if (r.fotos.isEmpty()) "Enviar NC" else "Enviar NC • ${r.fotos.size}📷",
+                    val rotulo = if (r.status == Status.REPARO) "Enviar NC" else "Enviar"
+                    Text(if (r.fotos.isEmpty()) rotulo else "$rotulo • ${r.fotos.size}📷",
                         color = Cores.WhatsApp, style = MaterialTheme.typography.labelMedium)
                 }
             }
@@ -1425,6 +1515,8 @@ private fun FolhaVeiculo(
         }
     }
     var responsavel by remember { mutableStateOf(inicial?.responsavel ?: r0?.responsavel ?: "") }
+    var motivo by remember { mutableStateOf(inicial?.motivo ?: r0?.motivo ?: "") }
+    var observacao by remember { mutableStateOf(inicial?.observacao ?: r0?.observacao ?: "") }
     val fotos = remember {
         mutableStateListOf<String>().apply { addAll(inicial?.fotos ?: r0?.fotos ?: emptyList()) }
     }
@@ -1445,9 +1537,11 @@ private fun FolhaVeiculo(
     /** O que está preenchido agora (null se o formulário de novo veículo estiver vazio). */
     fun rascunhoAtual(): Rascunho? {
         val vazio = vin.isBlank() && modelo == null && cor == null && status == null &&
-            reparo.isBlank() && responsavel.isBlank() && fotos.isEmpty() && intervalo == AUTOMATICO
+            reparo.isBlank() && responsavel.isBlank() && fotos.isEmpty() && intervalo == AUTOMATICO &&
+            motivo.isBlank() && observacao.isBlank()
         return if (vazio) null else Rascunho(
-            usarPrefixo, vin, modelo, cor, status, reparo, responsavel, fotos.toList(), intervalo
+            usarPrefixo, vin, modelo, cor, status, reparo, responsavel, fotos.toList(), intervalo,
+            motivo, observacao
         )
     }
 
@@ -1456,7 +1550,7 @@ private fun FolhaVeiculo(
         Fotos.apagar(fotos.toList())
         fotos.clear()
         usarPrefixo = true; vin = ""; modelo = null; cor = null; status = null
-        reparo = ""; responsavel = ""; intervalo = AUTOMATICO
+        reparo = ""; responsavel = ""; intervalo = AUTOMATICO; motivo = ""; observacao = ""
         onRascunho(null)
     }
 
@@ -1492,6 +1586,8 @@ private fun FolhaVeiculo(
         // Reparo sem descrição = Fazendo Inspeção 360 (não contabiliza).
         val st = if (status == Status.REPARO && rep.isEmpty()) null else status
         val ehReparo = st == Status.REPARO
+        val comEnvio = st in STATUS_COM_ENVIO
+        val ehBloqueioOuSeparado = st == Status.BLOQUEADO || st == Status.SEPARADO
         return Registro(
             vin = v,
             modelo = modelo,
@@ -1500,8 +1596,10 @@ private fun FolhaVeiculo(
             reparo = if (ehReparo) rep else null,
             intervalo = if (intervalo == AUTOMATICO) intervaloAgora() else intervalo,
             ordem = inicial?.ordem ?: 0,
-            responsavel = if (ehReparo) responsavel.trim().ifEmpty { null } else null,
-            fotos = if (ehReparo) fotos.toList() else emptyList()
+            responsavel = if (comEnvio) responsavel.trim().ifEmpty { null } else null,
+            fotos = if (comEnvio) fotos.toList() else emptyList(),
+            motivo = if (ehBloqueioOuSeparado) motivo.trim().ifEmpty { null } else null,
+            observacao = if (ehBloqueioOuSeparado) observacao.trim().ifEmpty { null } else null
         )
     }
 
@@ -1594,30 +1692,9 @@ private fun FolhaVeiculo(
             }
 
             Secao("Status", null) {
-                val opcoes = listOf<Status?>(null, Status.APROVADO, Status.REPARO)
-                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    opcoes.forEachIndexed { i, st ->
-                        SegmentedButton(
-                            selected = status == st,
-                            onClick = { status = st },
-                            shape = SegmentedButtonDefaults.itemShape(index = i, count = opcoes.size),
-                            colors = SegmentedButtonDefaults.colors(
-                                activeContainerColor = corStatus(st).copy(alpha = 0.2f),
-                                activeContentColor = corStatus(st),
-                                activeBorderColor = corStatus(st),
-                                inactiveContainerColor = Cores.SuperficieAlta,
-                                inactiveContentColor = Cores.TextoSuave,
-                                inactiveBorderColor = Cores.Borda
-                            ),
-                            icon = {}
-                        ) {
-                            Text(
-                                if (st == Status.APROVADO) "🟢 Aprovado" else rotuloStatus(st),
-                                maxLines = 1, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
-                }
+                LinhaStatus(listOf(null, Status.APROVADO, Status.REPARO), status) { status = it }
+                Spacer(Modifier.height(8.dp))
+                LinhaStatus(listOf(Status.BLOQUEADO, Status.SEPARADO), status) { status = it }
                 if (status == Status.REPARO) {
                     Spacer(Modifier.height(10.dp))
                     // Sugestões do banco de reparos em uma caixa suspensa enquanto digita.
@@ -1659,11 +1736,33 @@ private fun FolhaVeiculo(
                         }
                     }
 
+                }
+                if (status == Status.BLOQUEADO || status == Status.SEPARADO) {
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = motivo,
+                        onValueChange = { motivo = it },
+                        label = { Text("Motivo (opcional)") },
+                        shape = RoundedCornerShape(14.dp),
+                        colors = coresCampo,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = observacao,
+                        onValueChange = { observacao = it },
+                        label = { Text("Observação (opcional)") },
+                        shape = RoundedCornerShape(14.dp),
+                        colors = coresCampo,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                if (status in STATUS_COM_ENVIO) {
                     Spacer(Modifier.height(12.dp))
                     OutlinedTextField(
                         value = responsavel,
                         onValueChange = { responsavel = it },
-                        label = { Text("Responsável") },
+                        label = { Text(if (status == Status.REPARO) "Responsável" else "Responsável (opcional)") },
                         singleLine = true,
                         shape = RoundedCornerShape(14.dp),
                         colors = coresCampo,
@@ -1720,14 +1819,14 @@ private fun FolhaVeiculo(
                             val r = montar()
                             when {
                                 r == null -> Toast.makeText(context, "Digite o VIN.", Toast.LENGTH_SHORT).show()
-                                r.status != Status.REPARO ->
+                                r.status !in STATUS_COM_ENVIO ->
                                     Toast.makeText(context, "Escreva o reparo (NC) antes de enviar.",
                                         Toast.LENGTH_SHORT).show()
                                 else -> {
                                     // Enviar também salva o veículo na lista (novo ou edição).
                                     Fotos.apagar((fotosOriginais + fotos).distinct().filter { it !in r.fotos })
                                     onSalvar(r)
-                                    enviarWhatsAppComFotos(context, Formatador.negado(r), r.fotos)
+                                    enviarWhatsAppComFotos(context, Formatador.mensagemDe(r).orEmpty(), r.fotos)
                                 }
                             }
                         },
@@ -1742,7 +1841,12 @@ private fun FolhaVeiculo(
                     ) {
                         Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Salvar e enviar veículo negado (${fotos.size} foto(s))", fontWeight = FontWeight.SemiBold)
+                        val tipo = when (status) {
+                            Status.BLOQUEADO -> "bloqueado"
+                            Status.SEPARADO -> "separado"
+                            else -> "negado"
+                        }
+                        Text("Salvar e enviar veículo $tipo (${fotos.size} foto(s))", fontWeight = FontWeight.SemiBold)
                     }
                 }
             }

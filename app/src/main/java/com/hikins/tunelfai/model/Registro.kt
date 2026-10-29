@@ -3,7 +3,9 @@ package com.hikins.tunelfai.model
 /** Status de um veículo no túnel. Sem status (null) = "Fazendo Inspeção 360" (não contabiliza). */
 enum class Status(val texto: String) {
     APROVADO("🟢 Aprovado"),
-    REPARO("Reparo")
+    REPARO("Reparo"),
+    BLOQUEADO("Bloqueado"),   // não entra nas estatísticas
+    SEPARADO("Separado")      // não entra nas estatísticas
 }
 
 /** VIN a partir do código de barras do chassi. */
@@ -67,16 +69,20 @@ data class Registro(
     val reparo: String?,      // descrição do reparo (só quando REPARO)
     val intervalo: String,    // ex.: "13:00"
     val ordem: Long,
-    val responsavel: String? = null,          // responsável pelo reparo (só quando REPARO)
-    val fotos: List<String> = emptyList()     // caminhos das fotos do demérito (só quando REPARO)
+    val responsavel: String? = null,          // responsável (Reparo, Bloqueado ou Separado)
+    val fotos: List<String> = emptyList(),    // fotos do demérito (Reparo, Bloqueado ou Separado)
+    val motivo: String? = null,               // motivo (só Bloqueado/Separado)
+    val observacao: String? = null            // observação (só Bloqueado/Separado)
 ) {
-    /** Só entra na Produção quem já tem status (Aprovado ou Reparo). */
-    val contabiliza: Boolean get() = status != null
+    /** Só entra na Produção quem é Aprovado ou Reparo (Inspeção, Bloqueado e Separado não contam). */
+    val contabiliza: Boolean get() = status == Status.APROVADO || status == Status.REPARO
 
     val textoStatus: String
         get() = when (status) {
             null -> "Fazendo Inspeção 360"
             Status.APROVADO -> Status.APROVADO.texto
             Status.REPARO -> "Reparo: ${reparo.orEmpty()}"
+            Status.BLOQUEADO -> "Bloqueado"
+            Status.SEPARADO -> "Separado"
         }
 }

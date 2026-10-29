@@ -65,6 +65,33 @@ object Formatador {
             "*NC:* *${r.reparo.orEmpty()}*\n" +
             "*Responsável:* *${r.responsavel.orEmpty()}*"
 
+    /**
+     * Veículo Bloqueado/Separado: Modelo e Responsável sempre; Motivo e Observação só se preenchidos.
+     */
+    private fun bloqueioOuSeparacao(titulo: String, r: Registro): String {
+        val linhas = mutableListOf(
+            "_*$titulo*_",
+            "",
+            "_*Modelo*_: ${r.modelo.orEmpty()}",
+            "_*Responsável*_: ${r.responsavel.orEmpty()}"
+        )
+        r.motivo?.takeIf { it.isNotBlank() }?.let { linhas += "_*Motivo:*_ $it" }
+        r.observacao?.takeIf { it.isNotBlank() }?.let { linhas += "_*Observação*_: $it" }
+        return linhas.joinToString("\n")
+    }
+
+    fun bloqueado(r: Registro): String = bloqueioOuSeparacao("Veiculo Bloqueado", r)
+
+    fun separado(r: Registro): String = bloqueioOuSeparacao("Veiculo Separado", r)
+
+    /** Mensagem individual do veículo conforme o status (null se o status não tem envio). */
+    fun mensagemDe(r: Registro): String? = when (r.status) {
+        Status.REPARO -> negado(r)
+        Status.BLOQUEADO -> bloqueado(r)
+        Status.SEPARADO -> separado(r)
+        else -> null
+    }
+
     /** Título da mensagem de um intervalo específico (negrito + itálico). */
     private const val CABECALHO_INTERVALO = "*_H/H LIBERAÇÃO TUNEL_*"
 

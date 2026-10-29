@@ -46,7 +46,8 @@ class Repositorio(context: Context) {
                 }
                 registros += Registro(
                     vin = o.getString("vin"),
-                    modelo = o.textoOuNull("modelo"),
+                    // "Tiggo 7" foi renomeado para "Tiggo 7 Pro Adas".
+                    modelo = o.textoOuNull("modelo")?.let { if (it == "Tiggo 7") "Tiggo 7 Pro Adas" else it },
                     cor = o.textoOuNull("cor"),
                     status = status,
                     reparo = reparo,

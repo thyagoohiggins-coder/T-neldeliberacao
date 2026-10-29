@@ -23,7 +23,7 @@ object Vin {
 /** Modelos e cores disponíveis (opcionais, só para identificar o carro no app). */
 object Catalogo {
     val modelos = listOf(
-        "Uni-T", "CS55", "CS75", "Tiggo 7", "Tiggo 7 Ice Low", "Tiggo 8 Ice", "Tiggo 5 Ice Low"
+        "Uni-T", "CS55", "CS75", "Tiggo 7 Pro Adas", "Tiggo 7 Ice Low", "Tiggo 8 Ice", "Tiggo 5 Ice Low"
     )
     val cores = listOf("Cinza", "Branco", "Preto", "Azul")
 }

@@ -36,6 +36,8 @@ object Atualizador {
         "0"
     }
 
+    const val PAGINA_VERSOES =
+        "https://github.com/thyagoohiggins-coder/T-neldeliberacao/releases/latest"
     private const val PAGINA_LATEST =
         "https://github.com/thyagoohiggins-coder/T-neldeliberacao/releases/latest"
     private const val BASE_DOWNLOAD =
@@ -47,8 +49,19 @@ object Atualizador {
      * Retorna null só se as duas falharem.
      */
     suspend fun verificar(context: Context): InfoAtualizacao? = withContext(Dispatchers.IO) {
+        ultimoErro = null
         viaApi(context) ?: viaRedirecionamento(context)
     }
+
+    /** Motivo da última falha (para mostrar ao usuário e diagnosticar). */
+    var ultimoErro: String? = null
+        private set
+
+    private fun anotar(origem: String, motivo: String) {
+        ultimoErro = listOfNotNull(ultimoErro, "$origem: $motivo").joinToString("\n")
+    }
+
+    private fun descrever(e: Exception): String = "${e.javaClass.simpleName}: ${e.message.orEmpty()}"
 
     /** Plano B: /releases/latest redireciona para .../tag/vX.Y; o APK tem nome fixo por versão. */
     private fun viaRedirecionamento(context: Context): InfoAtualizacao? = try {
@@ -59,10 +72,12 @@ object Atualizador {
             connectTimeout = 15000
             readTimeout = 15000
         }
+        val codigo = conn.responseCode
         val destino = conn.getHeaderField("Location").orEmpty()
         conn.disconnect()
         val tagCompleta = destino.substringAfterLast("/tag/", "")
         if (tagCompleta.isBlank()) {
+            anotar("Página", "HTTP $codigo sem redirecionamento")
             null
         } else {
             val tag = tagCompleta.removePrefix("v").trim()
@@ -75,6 +90,7 @@ object Atualizador {
             )
         }
     } catch (e: Exception) {
+        anotar("Página", descrever(e))
         null
     }
 
@@ -87,7 +103,10 @@ object Atualizador {
                 connectTimeout = 15000
                 readTimeout = 15000
             }
-            if (conn.responseCode != 200) return null
+            if (conn.responseCode != 200) {
+                anotar("API", "HTTP ${conn.responseCode}")
+                return null
+            }
             val corpo = conn.inputStream.bufferedReader().use { it.readText() }
             val json = JSONObject(corpo)
 
@@ -111,6 +130,7 @@ object Atualizador {
                 urlApk = urlApk
             )
         } catch (e: Exception) {
+            anotar("API", descrever(e))
             null
         }
     }

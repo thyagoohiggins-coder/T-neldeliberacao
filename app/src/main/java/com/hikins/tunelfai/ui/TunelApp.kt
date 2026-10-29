@@ -172,6 +172,7 @@ fun TunelApp() {
     var confirmarExcluirSel by remember { mutableStateOf(false) }
     var info by remember { mutableStateOf<InfoAtualizacao?>(null) }
     var mostrarDialogoUpdate by remember { mutableStateOf(false) }
+    var erroAtualizacao by remember { mutableStateOf<String?>(null) }
 
     var adiantar by remember { mutableStateOf(config.adiantarIntervalo) }
     var lembretes by remember { mutableStateOf(config.lembretes) }
@@ -295,9 +296,7 @@ fun TunelApp() {
                                     scope.launch {
                                         val r = Atualizador.verificar(context)
                                         when {
-                                            r == null -> Toast.makeText(context,
-                                                "Sem conexão ou nenhuma release encontrada.",
-                                                Toast.LENGTH_LONG).show()
+                                            r == null -> erroAtualizacao = Atualizador.ultimoErro ?: "Erro desconhecido"
                                             r.temNova -> { info = r; mostrarDialogoUpdate = true }
                                             else -> Toast.makeText(context,
                                                 "Você já está na versão mais recente (${r.versaoAtual}).",
@@ -677,6 +676,35 @@ fun TunelApp() {
             },
             dismissButton = {
                 TextButton(onClick = { confirmarLimpar = false }) { Text("Cancelar") }
+            }
+        )
+    }
+
+    erroAtualizacao?.let { erro ->
+        AlertDialog(
+            onDismissRequest = { erroAtualizacao = null },
+            containerColor = Cores.Superficie,
+            title = { Text("Não foi possível verificar") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Você pode abrir a página de versões no navegador e baixar o APK mais recente.")
+                    Text(erro, color = Cores.TextoSuave, fontFamily = FontFamily.Monospace,
+                        style = MaterialTheme.typography.bodySmall)
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    erroAtualizacao = null
+                    runCatching {
+                        context.startActivity(
+                            android.content.Intent(android.content.Intent.ACTION_VIEW,
+                                android.net.Uri.parse(Atualizador.PAGINA_VERSOES))
+                        )
+                    }
+                }) { Text("Abrir no navegador") }
+            },
+            dismissButton = {
+                TextButton(onClick = { erroAtualizacao = null }) { Text("Fechar") }
             }
         )
     }

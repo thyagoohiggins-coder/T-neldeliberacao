@@ -18,6 +18,21 @@ class Configuracoes(context: Context) {
         get() = prefs.getBoolean("lembretes", false)
         set(v) = prefs.edit().putBoolean("lembretes", v).apply()
 
+    /** Vibrar o celular junto com o lembrete de fechamento. */
+    var vibrar: Boolean
+        get() = prefs.getBoolean("vibrar", false)
+        set(v) = prefs.edit().putBoolean("vibrar", v).apply()
+
+    /** Força da vibração: 0 = fraca, 1 = média, 2 = forte. */
+    var vibracaoForca: Int
+        get() = prefs.getInt("vibracao_forca", 1)
+        set(v) = prefs.edit().putInt("vibracao_forca", v).apply()
+
+    /** Duração da vibração em segundos (2, 3 ou 4). */
+    var vibracaoSegundos: Int
+        get() = prefs.getInt("vibracao_segundos", 3)
+        set(v) = prefs.edit().putInt("vibracao_segundos", v).apply()
+
     /** Banco de reparos pré-definidos, sugeridos ao escrever o reparo de um veículo. */
     var reparos: List<String>
         get() {

@@ -9,6 +9,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -23,7 +25,8 @@ import java.util.Calendar
  */
 object Lembretes {
 
-    private const val CANAL = "lembretes_fechamento"
+    // Canal sem vibração própria: a vibração é feita pelo app, com a força/duração configuradas.
+    private const val CANAL = "lembretes_fechamento_v2"
     private const val ACAO = "com.hikins.tunelfai.LEMBRETE"
 
     /** (hora, minuto, intervalo) de cada lembrete do dia. */
@@ -74,6 +77,7 @@ object Lembretes {
         if (Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(CANAL) == null) {
             nm.createNotificationChannel(
                 NotificationChannel(CANAL, "Lembretes de fechamento", NotificationManager.IMPORTANCE_HIGH)
+                    .apply { enableVibration(false) }
             )
         }
         val abrir = PendingIntent.getActivity(
@@ -89,6 +93,23 @@ object Lembretes {
             .setAutoCancel(true)
             .build()
         NotificationManagerCompat.from(context).notify(intervalo.hashCode(), n)
+
+        val cfg = Configuracoes(context)
+        if (cfg.vibrar) vibrar(context, cfg.vibracaoForca, cfg.vibracaoSegundos)
+    }
+
+    /** Vibra por [segundos] com força 0 = fraca, 1 = média, 2 = forte. */
+    @Suppress("DEPRECATION")
+    fun vibrar(context: Context, forca: Int, segundos: Int) {
+        val v = context.getSystemService(Vibrator::class.java) ?: return
+        if (!v.hasVibrator()) return
+        val ms = segundos.coerceIn(1, 10) * 1000L
+        if (Build.VERSION.SDK_INT >= 26) {
+            val amplitude = when (forca) { 0 -> 70; 2 -> 255; else -> 160 }
+            v.vibrate(VibrationEffect.createOneShot(ms, amplitude))
+        } else {
+            v.vibrate(ms)
+        }
     }
 }
 

@@ -59,6 +59,13 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.alpha
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -139,9 +146,16 @@ private fun intervaloEmAndamento(c: Calendar): String? {
 }
 
 private fun corStatus(status: Status?): Color = when (status) {
-    null -> Cores.Cinza
+    null -> Cores.Azul
     Status.APROVADO -> Cores.Verde
-    Status.REPARO -> Cores.Ambar
+    Status.REPARO -> Cores.Vermelho
+}
+
+/** Ordem na lista: Inspeção 360 no topo, depois Reparo, por último Aprovado. */
+private fun prioridade(status: Status?): Int = when (status) {
+    null -> 0
+    Status.REPARO -> 1
+    Status.APROVADO -> 2
 }
 
 private fun rotuloStatus(status: Status?): String = when (status) {
@@ -176,6 +190,10 @@ fun TunelApp() {
 
     var adiantar by remember { mutableStateOf(config.adiantarIntervalo) }
     var lembretes by remember { mutableStateOf(config.lembretes) }
+    var vibrar by remember { mutableStateOf(config.vibrar) }
+    var vibracaoForca by remember { mutableStateOf(config.vibracaoForca) }
+    var vibracaoSegundos by remember { mutableStateOf(config.vibracaoSegundos) }
+    var confirmarExcluirRepetidos by remember { mutableStateOf(false) }
     val bancoReparos = remember { mutableStateListOf<String>().apply { addAll(config.reparos) } }
     var novoReparo by remember { mutableStateOf("") }
     var agora by remember { mutableStateOf(Calendar.getInstance()) }
@@ -577,6 +595,77 @@ fun TunelApp() {
                     }
                 )
 
+                if (lembretes) {
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Cores.SuperficieAlta)
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Vibrar no lembrete", fontWeight = FontWeight.SemiBold)
+                                Text("O celular vibra junto com a notificação.",
+                                    style = MaterialTheme.typography.bodySmall, color = Cores.TextoSuave)
+                            }
+                            Switch(
+                                checked = vibrar,
+                                onCheckedChange = { vibrar = it; config.vibrar = it },
+                                colors = SwitchDefaults.colors(checkedTrackColor = Cores.Azul)
+                            )
+                        }
+                        if (vibrar) {
+                            Text("Força", style = MaterialTheme.typography.labelMedium, color = Cores.TextoSuave)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                listOf("Fraca", "Média", "Forte").forEachIndexed { i, rotulo ->
+                                    Chip(texto = rotulo, selecionado = vibracaoForca == i,
+                                        onClick = { vibracaoForca = i; config.vibracaoForca = i })
+                                }
+                            }
+                            Text("Duração", style = MaterialTheme.typography.labelMedium, color = Cores.TextoSuave)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                listOf(2, 3, 4).forEach { seg ->
+                                    Chip(texto = "$seg s", selecionado = vibracaoSegundos == seg,
+                                        onClick = { vibracaoSegundos = seg; config.vibracaoSegundos = seg })
+                                }
+                            }
+                            OutlinedButton(
+                                onClick = { Lembretes.vibrar(context, vibracaoForca, vibracaoSegundos) },
+                                shape = RoundedCornerShape(12.dp)
+                            ) { Text("Testar vibração") }
+                        }
+                    }
+                }
+
+                // Excluir VINs repetidos
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Cores.SuperficieAlta)
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Excluir VINs repetidos", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            if (qtdRepetidos == 0) "Nenhum VIN repetido no momento."
+                            else "Mantém o primeiro registro de cada VIN e apaga as cópias " +
+                                "(${registros.size - contagemVin.size} registro(s)).",
+                            style = MaterialTheme.typography.bodySmall, color = Cores.TextoSuave
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = { confirmarExcluirRepetidos = true },
+                        enabled = qtdRepetidos > 0,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Cores.Vermelho)
+                    ) { Text("Excluir") }
+                }
+
                 // Banco de reparos
                 Column(
                     Modifier
@@ -639,7 +728,7 @@ fun TunelApp() {
                                 Modifier
                                     .size(8.dp)
                                     .clip(CircleShape)
-                                    .background(Cores.Ambar)
+                                    .background(Cores.Vermelho)
                             )
                             Spacer(Modifier.width(10.dp))
                             Text(item, modifier = Modifier.weight(1f))
@@ -655,6 +744,35 @@ fun TunelApp() {
                 }
             }
         }
+    }
+
+    if (confirmarExcluirRepetidos) {
+        AlertDialog(
+            onDismissRequest = { confirmarExcluirRepetidos = false },
+            containerColor = Cores.Superficie,
+            title = { Text("Excluir VINs repetidos?") },
+            text = { Text("Fica só o primeiro registro de cada VIN; as cópias (e suas fotos) serão apagadas.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val manter = registros.sortedBy { it.ordem }
+                            .distinctBy { it.vin.uppercase() }.map { it.ordem }.toSet()
+                        val remover = registros.filter { it.ordem !in manter }
+                        Fotos.apagar(remover.flatMap { it.fotos })
+                        registros.removeAll { it.ordem !in manter }
+                        selecionados.removeAll { it !in manter }
+                        persistir()
+                        confirmarExcluirRepetidos = false
+                        Toast.makeText(context, "${remover.size} registro(s) repetido(s) excluído(s).",
+                            Toast.LENGTH_SHORT).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Cores.Vermelho)
+                ) { Text("Excluir") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmarExcluirRepetidos = false }) { Text("Cancelar") }
+            }
+        )
     }
 
     if (confirmarLimpar) {
@@ -824,6 +942,32 @@ private fun Pilula(texto: String, cor: Color) {
     )
 }
 
+/** Etiqueta "Inspeção 360" com animação de em andamento (spinner + pulsar). */
+@Composable
+private fun PilulaInspecao() {
+    val anim = rememberInfiniteTransition(label = "inspecao")
+    val alfa by anim.animateFloat(
+        initialValue = 0.55f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(800), RepeatMode.Reverse), label = "alfa"
+    )
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(50))
+            .background(Cores.Azul.copy(alpha = 0.16f))
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(11.dp),
+            color = Cores.Azul,
+            strokeWidth = 1.5.dp
+        )
+        Spacer(Modifier.width(6.dp))
+        Text("Inspeção 360", color = Cores.Azul, style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.alpha(alfa))
+    }
+}
+
 @Composable
 private fun EstadoVazio() {
     Column(
@@ -864,7 +1008,8 @@ private fun CardIntervalo(
     onSelecionarGrupo: (List<Long>) -> Unit,
     onEnviar: () -> Unit
 ) {
-    val doIntervalo = registros.filter { it.intervalo == intervalo }.sortedBy { it.ordem }
+    val doIntervalo = registros.filter { it.intervalo == intervalo }
+        .sortedWith(compareBy<Registro>({ prioridade(it.status) }, { it.ordem }))
     val e = Formatador.estatistica(intervalo, registros)
     val emInspecao = doIntervalo.count { it.status == null }
     val ids = doIntervalo.map { it.ordem }
@@ -1019,13 +1164,13 @@ private fun LinhaVeiculo(
                 }
             }
             if (r.status == Status.REPARO && !r.reparo.isNullOrBlank()) {
-                Text(r.reparo, color = Cores.Ambar, style = MaterialTheme.typography.bodySmall,
+                Text(r.reparo, color = Cores.Vermelho, style = MaterialTheme.typography.bodySmall,
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
         Spacer(Modifier.width(8.dp))
         Column(horizontalAlignment = Alignment.End) {
-            Pilula(rotuloStatus(r.status), corSt)
+            if (r.status == null) PilulaInspecao() else Pilula(rotuloStatus(r.status), corSt)
             if (r.status == Status.REPARO && !modoSelecao) {
                 val context = LocalContext.current
                 TextButton(
@@ -1314,7 +1459,7 @@ private fun FolhaVeiculo(
                         ) {
                             sugestoes.forEach { sug ->
                                 Chip(texto = sug, selecionado = false, onClick = { reparo = sug },
-                                    corBolinha = Cores.Ambar)
+                                    corBolinha = Cores.Vermelho)
                             }
                         }
                     }

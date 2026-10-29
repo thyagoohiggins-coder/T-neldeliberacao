@@ -173,6 +173,12 @@ private fun corStatus(status: Status?): Color = when (status) {
     Status.SEPARADO -> Cores.Cinza
 }
 
+/** "95PEFL31DVB006944" -> "VB006944"; VINs curtos (já "VB...") ficam como estão. */
+private fun vinCurto(vin: String): String {
+    val i = vin.lastIndexOf(PREFIXO_VIN)
+    return if (vin.length > 10 && i > 0) vin.substring(i) else vin
+}
+
 /** Status que têm mensagem própria no WhatsApp (com responsável e fotos). */
 private val STATUS_COM_ENVIO = setOf(Status.REPARO, Status.BLOQUEADO, Status.SEPARADO)
 
@@ -1352,8 +1358,14 @@ private fun LinhaVeiculo(
                     LogoMarca(marca, 20.dp)
                     Spacer(Modifier.width(6.dp))
                 }
-                Text(r.vin, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 15.sp,
+                // Chassi completo: em destaque só o final a partir de "VB" (ex.: VB003682).
+                val curto = vinCurto(r.vin)
+                Text(curto, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 15.sp,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            if (vinCurto(r.vin) != r.vin) {
+                Text(r.vin, fontFamily = FontFamily.Monospace, color = Cores.TextoSuave,
+                    style = MaterialTheme.typography.labelSmall, maxLines = 1)
             }
             if (vezes > 1) {
                 Text("VIN repetido • aparece ${vezes}x", color = Cores.Vermelho,

@@ -126,8 +126,9 @@ private fun CameraComRecorte(onLido: (String) -> Unit) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val vw = with(densidade) { maxWidth.toPx() }
         val vh = with(densidade) { maxHeight.toPx() }
-        val largura = vw * 0.86f
-        val altura = with(densidade) { 130.dp.toPx() }
+        // Retângulo do tamanho de um código de barras de chassi (largo e baixo).
+        val largura = vw * 0.72f
+        val altura = with(densidade) { 84.dp.toPx() }
         val l = (vw - largura) / 2f
         val t = (vh - altura) / 2f
         recorte.set(Recorte(vw, vh, l, t, l + largura, t + altura))
@@ -241,11 +242,13 @@ private fun analisar(
 
     leitor.process(InputImage.fromMediaImage(media, rotacao))
         .addOnSuccessListener { codigos ->
-            val alvo = codigos.firstOrNull { c ->
+            val dentro = codigos.filter { c ->
                 val caixa = c.boundingBox
                 !c.rawValue.isNullOrBlank() && caixa != null &&
                     caixa.exactCenterX() in l..r && caixa.exactCenterY() in t..b
             }
+            // Prefere o que tem cara de chassi (17 caracteres).
+            val alvo = dentro.firstOrNull { it.rawValue!!.trim().length == 17 } ?: dentro.firstOrNull()
             alvo?.rawValue?.let(onAchou)
         }
         .addOnCompleteListener { proxy.close() }

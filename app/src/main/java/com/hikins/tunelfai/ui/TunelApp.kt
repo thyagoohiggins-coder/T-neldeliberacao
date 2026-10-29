@@ -129,6 +129,19 @@ import kotlinx.coroutines.launch
 import java.util.Calendar
 
 private const val AUTOMATICO = "Auto"
+
+/** Campos de um "Novo veículo" fechado sem salvar (voltam ao abrir o formulário de novo). */
+private data class Rascunho(
+    val usarPrefixo: Boolean,
+    val vin: String,
+    val modelo: String?,
+    val cor: String?,
+    val status: Status?,
+    val reparo: String,
+    val responsavel: String,
+    val fotos: List<String>,
+    val intervalo: String
+)
 private const val PREFIXO_VIN = "VB"
 private const val MAX_FOTOS = 4
 private val RESPONSAVEIS = listOf("Trim Shop", "Small", "Fai", "Paint", "CKD", "Logística")
@@ -179,6 +192,7 @@ fun TunelApp() {
     var confirmarLimpar by remember { mutableStateOf(false) }
     var mostrarConfig by remember { mutableStateOf(false) }
     var novoAberto by remember { mutableStateOf(false) }
+    var rascunho by remember { mutableStateOf<Rascunho?>(null) }
     var editando by remember { mutableStateOf<Registro?>(null) }
     // Seleção múltipla (pela "ordem" de cada registro) para mover/excluir em grupo.
     val selecionados = remember { mutableStateListOf<Long>() }
@@ -473,8 +487,11 @@ fun TunelApp() {
             inicial = null,
             adiantar = adiantar,
             bancoReparos = bancoReparos,
+            rascunho = rascunho,
+            onRascunho = { rascunho = it },
             onFechar = { novoAberto = false },
             onSalvar = { r ->
+                rascunho = null
                 seq += 1
                 registros.add(r.copy(ordem = seq))
                 persistir()
@@ -861,6 +878,7 @@ fun TunelApp() {
                 Button(
                     onClick = {
                         Fotos.apagar(registros.flatMap { it.fotos })
+                        Fotos.apagar(rascunho?.fotos ?: emptyList()); rascunho = null
                         registros.clear(); selecionados.clear(); seq = 0
                         persistir()
                         confirmarLimpar = false
@@ -1325,20 +1343,26 @@ private fun FolhaVeiculo(
     bancoReparos: List<String>,
     onFechar: () -> Unit,
     onSalvar: (Registro) -> Unit,
-    onExcluir: (() -> Unit)? = null
+    onExcluir: (() -> Unit)? = null,
+    rascunho: Rascunho? = null,
+    onRascunho: (Rascunho?) -> Unit = {}
 ) {
     val context = LocalContext.current
+    // Novo veículo fechado sem salvar: os campos voltam do rascunho.
+    val r0 = if (inicial == null) rascunho else null
     // Todo VIN começa com "VB": o prefixo já vem escrito e o usuário digita só o resto.
     // Lido pelo código de barras: o prefixo some e o VIN fica exatamente como o código.
-    var usarPrefixo by remember { mutableStateOf(inicial?.vin?.startsWith(PREFIXO_VIN) ?: true) }
-    var vin by remember {
-        mutableStateOf(inicial?.vin?.let { if (usarPrefixo) it.removePrefix(PREFIXO_VIN) else it } ?: "")
+    var usarPrefixo by remember {
+        mutableStateOf(inicial?.vin?.startsWith(PREFIXO_VIN) ?: r0?.usarPrefixo ?: true)
     }
-    var modelo by remember { mutableStateOf(inicial?.modelo) }
-    var cor by remember { mutableStateOf(inicial?.cor) }
-    var status by remember { mutableStateOf(inicial?.status) }
-    var reparo by remember { mutableStateOf(inicial?.reparo ?: "") }
-    var intervalo by remember { mutableStateOf(inicial?.intervalo ?: AUTOMATICO) }
+    var vin by remember {
+        mutableStateOf(inicial?.vin?.let { if (usarPrefixo) it.removePrefix(PREFIXO_VIN) else it } ?: r0?.vin ?: "")
+    }
+    var modelo by remember { mutableStateOf(inicial?.modelo ?: r0?.modelo) }
+    var cor by remember { mutableStateOf(inicial?.cor ?: r0?.cor) }
+    var status by remember { mutableStateOf(inicial?.status ?: r0?.status) }
+    var reparo by remember { mutableStateOf(inicial?.reparo ?: r0?.reparo ?: "") }
+    var intervalo by remember { mutableStateOf(inicial?.intervalo ?: r0?.intervalo ?: AUTOMATICO) }
     var confirmarExcluir by remember { mutableStateOf(false) }
     var abrirScanner by remember { mutableStateOf(false) }
     var menuReparo by remember { mutableStateOf(false) }
@@ -1350,8 +1374,10 @@ private fun FolhaVeiculo(
         val completo = if (usarPrefixo) PREFIXO_VIN + vin else vin
         Catalogo.detectar(completo)?.let { modelo = it.nome }
     }
-    var responsavel by remember { mutableStateOf(inicial?.responsavel ?: "") }
-    val fotos = remember { mutableStateListOf<String>().apply { addAll(inicial?.fotos ?: emptyList()) } }
+    var responsavel by remember { mutableStateOf(inicial?.responsavel ?: r0?.responsavel ?: "") }
+    val fotos = remember {
+        mutableStateListOf<String>().apply { addAll(inicial?.fotos ?: r0?.fotos ?: emptyList()) }
+    }
     val fotosOriginais = remember { inicial?.fotos ?: emptyList() }
     var fotoPendente by remember { mutableStateOf<File?>(null) }
 
@@ -1366,9 +1392,34 @@ private fun FolhaVeiculo(
         uris.take(MAX_FOTOS - fotos.size).forEach { u -> Fotos.copiarDaGaleria(context, u)?.let { fotos.add(it) } }
     }
 
-    /** Fecha sem salvar: apaga só as fotos novas desta edição. */
+    /** O que está preenchido agora (null se o formulário de novo veículo estiver vazio). */
+    fun rascunhoAtual(): Rascunho? {
+        val vazio = vin.isBlank() && modelo == null && cor == null && status == null &&
+            reparo.isBlank() && responsavel.isBlank() && fotos.isEmpty() && intervalo == AUTOMATICO
+        return if (vazio) null else Rascunho(
+            usarPrefixo, vin, modelo, cor, status, reparo, responsavel, fotos.toList(), intervalo
+        )
+    }
+
+    /** Limpa o formulário de novo veículo (e apaga as fotos já tiradas nele). */
+    fun limparCampos() {
+        Fotos.apagar(fotos.toList())
+        fotos.clear()
+        usarPrefixo = true; vin = ""; modelo = null; cor = null; status = null
+        reparo = ""; responsavel = ""; intervalo = AUTOMATICO
+        onRascunho(null)
+    }
+
+    /**
+     * Fecha sem salvar. Novo veículo: guarda tudo como rascunho para quando abrir de novo.
+     * Edição: descarta as mudanças e apaga só as fotos novas.
+     */
     fun descartar() {
-        Fotos.apagar(fotos.filter { it !in fotosOriginais })
+        if (inicial == null) {
+            onRascunho(rascunhoAtual())
+        } else {
+            Fotos.apagar(fotos.filter { it !in fotosOriginais })
+        }
         onFechar()
     }
 
@@ -1422,8 +1473,14 @@ private fun FolhaVeiculo(
                 .padding(start = 20.dp, end = 20.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text(if (inicial == null) "Novo veículo" else "Editar veículo",
-                style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(if (inicial == null) "Novo veículo" else "Editar veículo",
+                    style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f))
+                if (inicial == null && rascunhoAtual() != null) {
+                    TextButton(onClick = { limparCampos() }) { Text("Limpar campos") }
+                }
+            }
 
             OutlinedTextField(
                 value = vin,
@@ -1584,7 +1641,11 @@ private fun FolhaVeiculo(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         fotos.toList().forEach { caminho ->
-                            MiniaturaFoto(caminho, onRemover = { fotos.remove(caminho) })
+                            MiniaturaFoto(caminho, onRemover = {
+                                fotos.remove(caminho)
+                                // Foto nova desta tela: já apaga o arquivo; as originais só ao salvar.
+                                if (caminho !in fotosOriginais) Fotos.apagar(listOf(caminho))
+                            })
                         }
                         if (fotos.size < MAX_FOTOS) {
                             BotaoFoto(Icons.Filled.PhotoCamera, "Câmera") {

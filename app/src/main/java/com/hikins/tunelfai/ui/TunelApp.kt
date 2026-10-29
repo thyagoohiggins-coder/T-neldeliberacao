@@ -118,7 +118,10 @@ import com.hikins.tunelfai.data.Configuracoes
 import com.hikins.tunelfai.data.EstadoTunel
 import com.hikins.tunelfai.data.Repositorio
 import com.hikins.tunelfai.lembrete.Lembretes
+import com.hikins.tunelfai.R
 import com.hikins.tunelfai.model.Catalogo
+import com.hikins.tunelfai.model.Marca
+import androidx.compose.ui.res.painterResource
 import com.hikins.tunelfai.model.Intervalos
 import com.hikins.tunelfai.model.Registro
 import com.hikins.tunelfai.model.Status
@@ -205,6 +208,7 @@ fun TunelApp() {
     var adiantar by remember { mutableStateOf(config.adiantarIntervalo) }
     var lembretes by remember { mutableStateOf(config.lembretes) }
     var autoModeloCfg by remember { mutableStateOf(config.autoModelo) }
+    remember { PreferenciasUi.mostrarLogos = config.mostrarLogos }
     var metasEditadas by remember {
         mutableStateOf(config.metas.also { Intervalos.definirMetas(it) })
     }
@@ -617,6 +621,13 @@ fun TunelApp() {
                         "(ex.: 95PLDL61DVB → Uni-T).",
                     marcado = autoModeloCfg,
                     onMudar = { autoModeloCfg = it; config.autoModelo = it }
+                )
+                LinhaSwitch(
+                    titulo = "Logo da marca no VIN",
+                    descricao = "Mostra a logo da Chery (Tiggo) ou da Changan (Uni-T, CS55, CS75) " +
+                        "junto do VIN na lista e no cadastro.",
+                    marcado = PreferenciasUi.mostrarLogos,
+                    onMudar = { PreferenciasUi.mostrarLogos = it; config.mostrarLogos = it }
                 )
                 LinhaSwitch(
                     titulo = "Lembrete de fechamento",
@@ -1036,6 +1047,25 @@ private fun Pilula(texto: String, cor: Color) {
     )
 }
 
+/** Preferências de exibição lidas em vários pontos da tela (estado observável do Compose). */
+object PreferenciasUi {
+    var mostrarLogos by mutableStateOf(false)
+}
+
+/** Logo da marca do carro, num quadradinho arredondado. */
+@Composable
+private fun LogoMarca(marca: Marca, tamanho: androidx.compose.ui.unit.Dp) {
+    Image(
+        painter = painterResource(
+            if (marca == Marca.CHERY) R.drawable.logo_chery else R.drawable.logo_changan
+        ),
+        contentDescription = if (marca == Marca.CHERY) "Chery" else "Changan",
+        modifier = Modifier
+            .size(tamanho)
+            .clip(RoundedCornerShape(6.dp))
+    )
+}
+
 /** Etiqueta "Inspeção 360" com animação de em andamento (spinner + pulsar). */
 @Composable
 private fun PilulaInspecao() {
@@ -1235,8 +1265,15 @@ private fun LinhaVeiculo(
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(r.vin, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 15.sp,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val marca = if (PreferenciasUi.mostrarLogos) Catalogo.marcaDe(r.modelo, r.vin) else null
+                if (marca != null) {
+                    LogoMarca(marca, 20.dp)
+                    Spacer(Modifier.width(6.dp))
+                }
+                Text(r.vin, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 15.sp,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
             if (vezes > 1) {
                 Text("VIN repetido • aparece ${vezes}x", color = Cores.Vermelho,
                     fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelSmall)
@@ -1368,11 +1405,24 @@ private fun FolhaVeiculo(
     var menuReparo by remember { mutableStateOf(false) }
     val autoModelo = remember { Configuracoes(context).autoModelo }
 
-    /** Auxílio: escolhe o modelo pelo prefixo do chassi (pode ser desligado nas configurações). */
+    // true quando o modelo atual foi escolhido pelo prefixo (não pelo usuário).
+    var modeloAuto by remember { mutableStateOf(false) }
+
+    /**
+     * Auxílio: escolhe o modelo pelo prefixo do chassi a cada mudança do VIN (pode ser desligado
+     * nas configurações). Se o VIN deixar de bater com um prefixo, desfaz só a escolha automática.
+     */
     fun detectarModelo() {
         if (!autoModelo) return
         val completo = if (usarPrefixo) PREFIXO_VIN + vin else vin
-        Catalogo.detectar(completo)?.let { modelo = it.nome }
+        val achado = Catalogo.detectar(completo)
+        if (achado != null) {
+            modelo = achado.nome
+            modeloAuto = true
+        } else if (modeloAuto) {
+            modelo = null
+            modeloAuto = false
+        }
     }
     var responsavel by remember { mutableStateOf(inicial?.responsavel ?: r0?.responsavel ?: "") }
     val fotos = remember {
@@ -1496,7 +1546,12 @@ private fun FolhaVeiculo(
                     { Text(PREFIXO_VIN, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold,
                         color = Cores.Azul) }
                 } else null,
-                leadingIcon = { Icon(Icons.Filled.DirectionsCar, contentDescription = null) },
+                leadingIcon = {
+                    val completo = if (usarPrefixo) PREFIXO_VIN + vin else vin
+                    val marca = if (PreferenciasUi.mostrarLogos) Catalogo.marcaDe(modelo, completo) else null
+                    if (marca != null) LogoMarca(marca, 30.dp)
+                    else Icon(Icons.Filled.DirectionsCar, contentDescription = null)
+                },
                 trailingIcon = {
                     IconButton(onClick = { abrirScanner = true }) {
                         Icon(Icons.Filled.QrCodeScanner, contentDescription = "Ler código de barras do chassi",
@@ -1521,7 +1576,7 @@ private fun FolhaVeiculo(
                     Catalogo.modelos.forEach { mod ->
                         val m = mod.nome
                         Chip(texto = m, selecionado = modelo == m,
-                            onClick = { modelo = if (modelo == m) null else m })
+                            onClick = { modelo = if (modelo == m) null else m; modeloAuto = false })
                     }
                 }
             }

@@ -15,8 +15,13 @@ class Configuracoes(context: Context) {
 
     /** Seleciona o modelo automaticamente pelo prefixo do chassi (digitado ou lido no código). */
     var autoModelo: Boolean
-        get() = prefs.getBoolean("auto_modelo", true)
+        get() = prefs.getBoolean("auto_modelo", false)
         set(v) = prefs.edit().putBoolean("auto_modelo", v).apply()
+
+    /** Mostra a logo da marca (Chery/Changan) junto do VIN. */
+    var mostrarLogos: Boolean
+        get() = prefs.getBoolean("mostrar_logos", false)
+        set(v) = prefs.edit().putBoolean("mostrar_logos", v).apply()
 
     /** Lembrete de fechamento 15 min antes de cada intervalo. */
     var lembretes: Boolean

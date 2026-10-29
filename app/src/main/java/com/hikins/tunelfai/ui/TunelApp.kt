@@ -111,6 +111,7 @@ import kotlinx.coroutines.launch
 import java.util.Calendar
 
 private const val AUTOMATICO = "Auto"
+private const val PREFIXO_VIN = "VB"
 
 /** "06:00" -> "06:00 – 07:00" (versão de tela; a mensagem usa Formatador.faixa). */
 private fun faixaCurta(intervalo: String): String =
@@ -850,7 +851,11 @@ private fun FolhaVeiculo(
     onExcluir: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
-    var vin by remember { mutableStateOf(inicial?.vin ?: "") }
+    // Todo VIN começa com "VB": o prefixo já vem escrito e o usuário digita só o resto.
+    val usarPrefixo = remember { inicial?.vin?.startsWith(PREFIXO_VIN) ?: true }
+    var vin by remember {
+        mutableStateOf(inicial?.vin?.let { if (usarPrefixo) it.removePrefix(PREFIXO_VIN) else it } ?: "")
+    }
     var modelo by remember { mutableStateOf(inicial?.modelo) }
     var cor by remember { mutableStateOf(inicial?.cor) }
     var status by remember { mutableStateOf(inicial?.status) }
@@ -888,6 +893,10 @@ private fun FolhaVeiculo(
                 value = vin,
                 onValueChange = { vin = it.uppercase() },
                 label = { Text("VIN") },
+                prefix = if (usarPrefixo) {
+                    { Text(PREFIXO_VIN, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold,
+                        color = Cores.Azul) }
+                } else null,
                 leadingIcon = { Icon(Icons.Filled.DirectionsCar, contentDescription = null) },
                 singleLine = true,
                 shape = RoundedCornerShape(14.dp),
@@ -993,7 +1002,14 @@ private fun FolhaVeiculo(
                 }
                 Button(
                     onClick = {
-                        val v = vin.trim()
+                        val digitado = vin.trim()
+                        // Se colou o VIN completo (17 caracteres já com "VB"), não duplica o prefixo.
+                        val v = when {
+                            digitado.isBlank() -> ""
+                            !usarPrefixo -> digitado
+                            digitado.startsWith(PREFIXO_VIN) && digitado.length >= 17 -> digitado
+                            else -> PREFIXO_VIN + digitado
+                        }
                         if (v.isBlank()) {
                             Toast.makeText(context, "Digite o VIN.", Toast.LENGTH_SHORT).show()
                         } else {

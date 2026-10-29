@@ -67,6 +67,8 @@ import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -1339,6 +1341,7 @@ private fun FolhaVeiculo(
     var intervalo by remember { mutableStateOf(inicial?.intervalo ?: AUTOMATICO) }
     var confirmarExcluir by remember { mutableStateOf(false) }
     var abrirScanner by remember { mutableStateOf(false) }
+    var menuReparo by remember { mutableStateOf(false) }
     val autoModelo = remember { Configuracoes(context).autoModelo }
 
     /** Auxílio: escolhe o modelo pelo prefixo do chassi (pode ser desligado nas configurações). */
@@ -1505,28 +1508,41 @@ private fun FolhaVeiculo(
                 }
                 if (status == Status.REPARO) {
                     Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(
-                        value = reparo,
-                        onValueChange = { reparo = it },
-                        label = { Text("Descreva o reparo") },
-                        supportingText = { Text("Sem reparo escrito, o carro fica como Fazendo Inspeção 360.") },
-                        shape = RoundedCornerShape(14.dp),
-                        colors = coresCampo,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    // Sugestões do banco de reparos em uma caixa suspensa enquanto digita.
                     val sugestoes = Configuracoes.sugerir(bancoReparos, reparo)
-                    if (sugestoes.isNotEmpty()) {
-                        Spacer(Modifier.height(6.dp))
-                        Text("Sugestões do banco de reparos", color = Cores.TextoSuave,
-                            style = MaterialTheme.typography.labelSmall)
-                        Spacer(Modifier.height(6.dp))
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                    val mostrarSugestoes = menuReparo && sugestoes.isNotEmpty()
+                    ExposedDropdownMenuBox(
+                        expanded = mostrarSugestoes,
+                        onExpandedChange = { menuReparo = it }
+                    ) {
+                        OutlinedTextField(
+                            value = reparo,
+                            onValueChange = { reparo = it; menuReparo = true },
+                            label = { Text("Descreva o reparo") },
+                            supportingText = { Text("Sem reparo escrito, o carro fica como Fazendo Inspeção 360.") },
+                            shape = RoundedCornerShape(14.dp),
+                            colors = coresCampo,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(MenuAnchorType.PrimaryEditable)
+                        )
+                        ExposedDropdownMenu(
+                            expanded = mostrarSugestoes,
+                            onDismissRequest = { menuReparo = false }
                         ) {
                             sugestoes.forEach { sug ->
-                                Chip(texto = sug, selecionado = false, onClick = { reparo = sug },
-                                    corBolinha = Cores.Vermelho)
+                                DropdownMenuItem(
+                                    text = { Text(sug) },
+                                    leadingIcon = {
+                                        Box(
+                                            Modifier
+                                                .size(8.dp)
+                                                .clip(CircleShape)
+                                                .background(Cores.Vermelho)
+                                        )
+                                    },
+                                    onClick = { reparo = sug; menuReparo = false }
+                                )
                             }
                         }
                     }

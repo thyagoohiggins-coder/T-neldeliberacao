@@ -117,7 +117,7 @@ import java.util.Calendar
 
 private const val AUTOMATICO = "Auto"
 private const val PREFIXO_VIN = "VB"
-private const val MAX_FOTOS = 2
+private const val MAX_FOTOS = 3
 
 /** "06:00" -> "06:00 – 07:00" (versão de tela; a mensagem usa Formatador.faixa). */
 private fun faixaCurta(intervalo: String): String =

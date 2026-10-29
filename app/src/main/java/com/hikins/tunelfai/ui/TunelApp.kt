@@ -34,7 +34,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -340,17 +339,6 @@ fun TunelApp() {
                     total = Formatador.estatisticaTotal(registros),
                     emAndamento = emAndamento,
                     onEnviar = { enviarWhatsApp(context, Formatador.total(registros)) }
-                )
-            }
-
-            item(key = "linha") {
-                LinhaIntervalos(
-                    registros = registros,
-                    emAndamento = emAndamento,
-                    onClick = { intv ->
-                        val i = intervalosPresentes.indexOf(intv)
-                        if (i >= 0) scope.launch { listState.animateScrollToItem(3 + i) }
-                    }
                 )
             }
 
@@ -806,37 +794,6 @@ private fun Pilula(texto: String, cor: Color) {
             .background(cor.copy(alpha = 0.16f))
             .padding(horizontal = 10.dp, vertical = 4.dp)
     )
-}
-
-/* -------------------------------------------------- Linha de intervalos */
-
-@Composable
-private fun LinhaIntervalos(registros: List<Registro>, emAndamento: String?, onClick: (String) -> Unit) {
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(Intervalos.lista) { intv ->
-            val e = Formatador.estatistica(intv, registros)
-            val atual = intv == emAndamento
-            val cor = if (e.prod == null) Cores.TextoSuave else corDiferenca(e.dif)
-            Column(
-                Modifier
-                    .width(66.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(if (atual) Cores.AzulEscuro else Cores.Superficie)
-                    .border(1.dp, if (atual) Cores.Azul else Cores.Borda, RoundedCornerShape(14.dp))
-                    .combinedClickable(onClick = { onClick(intv) })
-                    .padding(vertical = 10.dp, horizontal = 8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Text(intv.substring(0, 2) + "h", fontWeight = FontWeight.Bold,
-                    color = if (atual) Color.White else Cores.Texto)
-                Text("${e.prod ?: 0}/${e.meta}", color = cor, fontWeight = FontWeight.SemiBold,
-                    style = MaterialTheme.typography.labelMedium)
-                BarraProgresso((e.prod ?: 0).toFloat() / e.meta.coerceAtLeast(1),
-                    if (e.prod == null) Cores.Borda else corDiferenca(e.dif), altura = 4.dp)
-            }
-        }
-    }
 }
 
 @Composable

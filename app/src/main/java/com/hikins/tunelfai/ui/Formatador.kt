@@ -6,7 +6,7 @@ import com.hikins.tunelfai.model.Status
 
 /** Estatística de um intervalo (ou do total). Produção/Aprovado null = ainda sem veículos. */
 data class Estatistica(val meta: Int, val prod: Int?, val aprov: Int?) {
-    val dif: Int? get() = aprov?.let { meta - it }   // Meta - Aprovado: positivo = faltam aprovados
+    val dif: Int? get() = aprov?.let { it - meta }   // Aprovado - Meta: negativo = faltam aprovados
 }
 
 /** Geração das mensagens de WhatsApp no formato do "FECHAMENTO TÚNEL". */
@@ -39,7 +39,7 @@ object Formatador {
         )
     }
 
-    /** TOTAL: Meta fixa (80), soma dos intervalos e Diferença = Meta - Aprovado. */
+    /** TOTAL: Meta fixa (80), soma dos intervalos e Diferença = Aprovado - Meta. */
     fun estatisticaTotal(registros: List<Registro>): Estatistica {
         val porIntervalo = Intervalos.lista.map { estatistica(it, registros) }
         val algum = porIntervalo.any { it.prod != null }

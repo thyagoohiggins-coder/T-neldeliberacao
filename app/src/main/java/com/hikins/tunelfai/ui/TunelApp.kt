@@ -810,7 +810,7 @@ private fun CardIntervalo(
                     Text(sub, color = Cores.TextoSuave, style = MaterialTheme.typography.bodySmall)
                 }
                 Pilula(
-                    e.dif?.let { if (it > 0) "Faltam $it" else if (it == 0) "Meta batida" else "Meta batida +${-it}" } ?: "Sem produção",
+                    e.dif?.let { if (it < 0) "Faltam ${-it}" else if (it == 0) "Meta batida" else "Meta batida +$it" } ?: "Sem produção",
                     corDiferenca(e.dif)
                 )
             }

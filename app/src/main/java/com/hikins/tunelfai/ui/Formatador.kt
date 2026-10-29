@@ -39,12 +39,12 @@ object Formatador {
         )
     }
 
-    /** TOTAL: Meta fixa (80), soma dos intervalos e Diferença = Aprovado - Meta. */
+    /** TOTAL: Meta = soma das metas dos intervalos, soma dos intervalos e Diferença = Aprovado - Meta. */
     fun estatisticaTotal(registros: List<Registro>): Estatistica {
         val porIntervalo = Intervalos.lista.map { estatistica(it, registros) }
         val algum = porIntervalo.any { it.prod != null }
         return Estatistica(
-            Intervalos.META_TOTAL,
+            Intervalos.metaTotal,
             if (algum) porIntervalo.sumOf { it.prod ?: 0 } else null,
             if (algum) porIntervalo.sumOf { it.aprov ?: 0 } else null
         )

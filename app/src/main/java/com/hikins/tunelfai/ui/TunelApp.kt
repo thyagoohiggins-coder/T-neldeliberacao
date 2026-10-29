@@ -96,6 +96,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -190,6 +191,16 @@ fun TunelApp() {
 
     var adiantar by remember { mutableStateOf(config.adiantarIntervalo) }
     var lembretes by remember { mutableStateOf(config.lembretes) }
+    var metasEditadas by remember {
+        mutableStateOf(config.metas.also { Intervalos.definirMetas(it) })
+    }
+    fun salvarMeta(intervalo: String, valor: Int?) {
+        val novas = if (valor == null || valor == Intervalos.metasPadrao[intervalo]) metasEditadas - intervalo
+        else metasEditadas + (intervalo to valor)
+        Intervalos.definirMetas(novas)
+        config.metas = novas
+        metasEditadas = novas
+    }
     var vibrar by remember { mutableStateOf(config.vibrar) }
     var vibracaoForca by remember { mutableStateOf(config.vibracaoForca) }
     var vibracaoSegundos by remember { mutableStateOf(config.vibracaoSegundos) }
@@ -345,6 +356,8 @@ fun TunelApp() {
             }
         }
     ) { padding ->
+        // Recria a lista quando as metas mudam (as estatísticas leem Intervalos.metaDe).
+        key(metasEditadas) {
         LazyColumn(
             state = listState,
             modifier = Modifier.padding(padding),
@@ -451,6 +464,7 @@ fun TunelApp() {
                     onEnviar = { enviarWhatsApp(context, Formatador.intervalo(intervalo, registros)) }
                 )
             }
+        }
         }
     }
 
@@ -635,6 +649,61 @@ fun TunelApp() {
                                 onClick = { Lembretes.vibrar(context, vibracaoForca, vibracaoSegundos) },
                                 shape = RoundedCornerShape(12.dp)
                             ) { Text("Testar vibração") }
+                        }
+                    }
+                }
+
+                // Editor de metas
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Cores.SuperficieAlta)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Metas por intervalo", fontWeight = FontWeight.SemiBold)
+                            Text("Total do dia: ${Intervalos.metaTotal}", color = Cores.Azul,
+                                style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                        }
+                        if (metasEditadas.isNotEmpty()) {
+                            TextButton(onClick = {
+                                Intervalos.definirMetas(emptyMap())
+                                config.metas = emptyMap()
+                                metasEditadas = emptyMap()
+                            }) { Text("Restaurar padrão") }
+                        }
+                    }
+                    Intervalos.lista.forEach { intv ->
+                        var texto by remember(intv, metasEditadas) {
+                            mutableStateOf(Intervalos.metaDe(intv).toString())
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(faixaCurta(intv), modifier = Modifier.weight(1f),
+                                color = if (intv in metasEditadas) Cores.Azul else Cores.Texto)
+                            OutlinedTextField(
+                                value = texto,
+                                onValueChange = { novo ->
+                                    texto = novo.filter { it.isDigit() }.take(3)
+                                    texto.toIntOrNull()?.let { salvarMeta(intv, it) }
+                                },
+                                singleLine = true,
+                                shape = RoundedCornerShape(10.dp),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                                ),
+                                textStyle = MaterialTheme.typography.bodyLarge.copy(
+                                    color = Cores.Azul, fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center
+                                ),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = Cores.Azul,
+                                    unfocusedBorderColor = Cores.Borda
+                                ),
+                                modifier = Modifier.width(84.dp)
+                            )
                         }
                     }
                 }

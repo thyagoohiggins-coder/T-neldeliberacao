@@ -9,8 +9,8 @@ object Intervalos {
         "11:00", "12:00", "13:00", "14:00", "15:00"
     )
 
-    /** Meta esperada de veículos processados em cada intervalo (soma = 80). */
-    private val metas: Map<String, Int> = mapOf(
+    /** Meta padrão de veículos processados em cada intervalo (soma = 80). */
+    val metasPadrao: Map<String, Int> = mapOf(
         "06:00" to 8,
         "07:00" to 10,
         "08:00" to 8,
@@ -23,8 +23,15 @@ object Intervalos {
         "15:00" to 8
     )
 
-    /** Meta total do dia (fixa) usada no resumo geral. */
-    const val META_TOTAL: Int = 80
+    /** Metas em uso (padrão + o que o usuário editou nas configurações). */
+    private var metas: Map<String, Int> = metasPadrao
+
+    fun definirMetas(editadas: Map<String, Int>) {
+        metas = metasPadrao + editadas.filterKeys { it in lista }
+    }
+
+    /** Meta total do dia: soma das metas dos intervalos. */
+    val metaTotal: Int get() = lista.sumOf { metaDe(it) }
 
     /** Minutos finais do intervalo em que o carro já vai para o intervalo seguinte (se ativado). */
     const val MINUTOS_ADIANTAR: Int = 15

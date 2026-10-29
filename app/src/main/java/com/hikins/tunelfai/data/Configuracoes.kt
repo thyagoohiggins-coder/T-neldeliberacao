@@ -33,6 +33,16 @@ class Configuracoes(context: Context) {
         get() = prefs.getInt("vibracao_segundos", 3)
         set(v) = prefs.edit().putInt("vibracao_segundos", v).apply()
 
+    /** Metas editadas por intervalo ("06:00" -> 8). Vazio = metas padrão. */
+    var metas: Map<String, Int>
+        get() = try {
+            val o = org.json.JSONObject(prefs.getString("metas", "{}") ?: "{}")
+            o.keys().asSequence().associateWith { o.getInt(it) }
+        } catch (e: Exception) {
+            emptyMap()
+        }
+        set(v) = prefs.edit().putString("metas", org.json.JSONObject(v as Map<*, *>).toString()).apply()
+
     /** Banco de reparos pré-definidos, sugeridos ao escrever o reparo de um veículo. */
     var reparos: List<String>
         get() {

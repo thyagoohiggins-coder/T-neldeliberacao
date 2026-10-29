@@ -117,6 +117,7 @@ import java.util.Calendar
 
 private const val AUTOMATICO = "Auto"
 private const val PREFIXO_VIN = "VB"
+private const val MAX_FOTOS = 2
 
 /** "06:00" -> "06:00 – 07:00" (versão de tela; a mensagem usa Formatador.faixa). */
 private fun faixaCurta(intervalo: String): String =
@@ -809,7 +810,7 @@ private fun CardIntervalo(
                     Text(sub, color = Cores.TextoSuave, style = MaterialTheme.typography.bodySmall)
                 }
                 Pilula(
-                    e.dif?.let { if (it >= 0) "Meta batida ${comSinal(it)}" else "Faltam ${-it}" } ?: "Sem produção",
+                    e.dif?.let { if (it > 0) "Faltam $it" else if (it == 0) "Meta batida" else "Meta batida +${-it}" } ?: "Sem produção",
                     corDiferenca(e.dif)
                 )
             }
@@ -1031,7 +1032,7 @@ private fun FolhaVeiculo(
         fotoPendente = null
     }
     val escolherFotos = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
-        uris.forEach { u -> Fotos.copiarDaGaleria(context, u)?.let { fotos.add(it) } }
+        uris.take(MAX_FOTOS - fotos.size).forEach { u -> Fotos.copiarDaGaleria(context, u)?.let { fotos.add(it) } }
     }
 
     /** Fecha sem salvar: apaga só as fotos novas desta edição. */
@@ -1202,8 +1203,13 @@ private fun FolhaVeiculo(
                     )
 
                     Spacer(Modifier.height(14.dp))
-                    Text("Fotos do demérito", fontWeight = FontWeight.SemiBold,
-                        style = MaterialTheme.typography.titleSmall)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Fotos do demérito", fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.titleSmall)
+                        Spacer(Modifier.width(6.dp))
+                        Text("opcional • até $MAX_FOTOS", color = Cores.TextoSuave,
+                            style = MaterialTheme.typography.labelSmall)
+                    }
                     Spacer(Modifier.height(8.dp))
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1212,13 +1218,15 @@ private fun FolhaVeiculo(
                         fotos.toList().forEach { caminho ->
                             MiniaturaFoto(caminho, onRemover = { fotos.remove(caminho) })
                         }
-                        BotaoFoto(Icons.Filled.PhotoCamera, "Câmera") {
-                            val f = Fotos.novoArquivo(context)
-                            fotoPendente = f
-                            tirarFoto.launch(Fotos.uriDe(context, f))
-                        }
-                        BotaoFoto(Icons.Filled.AddPhotoAlternate, "Galeria") {
-                            escolherFotos.launch("image/*")
+                        if (fotos.size < MAX_FOTOS) {
+                            BotaoFoto(Icons.Filled.PhotoCamera, "Câmera") {
+                                val f = Fotos.novoArquivo(context)
+                                fotoPendente = f
+                                tirarFoto.launch(Fotos.uriDe(context, f))
+                            }
+                            BotaoFoto(Icons.Filled.AddPhotoAlternate, "Galeria") {
+                                escolherFotos.launch("image/*")
+                            }
                         }
                     }
 

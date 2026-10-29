@@ -43,10 +43,10 @@ fun corDoCarro(cor: String?): Color = when (cor) {
     else -> Color.Transparent
 }
 
-/** Diferença: verde se bateu/passou a meta, vermelho se ficou abaixo. */
+/** Diferença (Meta - Aprovado): vermelho se ainda faltam aprovados, verde se bateu/passou a meta. */
 fun corDiferenca(dif: Int?): Color = when {
     dif == null -> Cores.TextoSuave
-    dif < 0 -> Cores.Vermelho
+    dif > 0 -> Cores.Vermelho
     else -> Cores.Verde
 }
 

@@ -69,14 +69,15 @@ object Formatador {
      * Veículo Bloqueado/Separado: Modelo e Responsável sempre; Motivo e Observação só se preenchidos.
      */
     private fun bloqueioOuSeparacao(titulo: String, r: Registro): String {
+        // Só negrito (sem itálico) e dois espaços depois dos dois pontos.
         val linhas = mutableListOf(
-            "_*$titulo*_",
+            "*$titulo*",
             "",
-            "_*Modelo*_: ${r.modelo.orEmpty()}",
-            "_*Responsável*_: ${r.responsavel.orEmpty()}"
+            "*Modelo:*  ${r.modelo.orEmpty()}",
+            "*Responsável:*  ${r.responsavel.orEmpty()}"
         )
-        r.motivo?.takeIf { it.isNotBlank() }?.let { linhas += "_*Motivo:*_ $it" }
-        r.observacao?.takeIf { it.isNotBlank() }?.let { linhas += "_*Observação*_: $it" }
+        r.motivo?.takeIf { it.isNotBlank() }?.let { linhas += "*Motivo:*  $it" }
+        r.observacao?.takeIf { it.isNotBlank() }?.let { linhas += "*Observação:*  $it" }
         return linhas.joinToString("\n")
     }
 

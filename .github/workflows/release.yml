@@ -58,7 +58,7 @@ jobs:
             echo "$KEYSTORE_BASE64" | base64 -d > release.keystore
             echo "Keystore restaurada — APK sairá assinado de release."
           else
-            echo "AVISO: Secret KEYSTORE_BASE64 ausente — o APK sairá assinado em debug."
+            echo "Secret KEYSTORE_BASE64 ausente — usando a chave fixa app/assinatura/tunelfai.jks."
           fi
 
       - name: Build do APK de release

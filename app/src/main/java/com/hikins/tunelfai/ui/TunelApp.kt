@@ -124,7 +124,8 @@ import java.util.Calendar
 
 private const val AUTOMATICO = "Auto"
 private const val PREFIXO_VIN = "VB"
-private const val MAX_FOTOS = 3
+private const val MAX_FOTOS = 4
+private val RESPONSAVEIS = listOf("Trim Shop", "Small", "Fai", "Paint", "CKD", "Logística")
 
 /** "06:00" -> "06:00 – 07:00" (versão de tela; a mensagem usa Formatador.faixa). */
 private fun faixaCurta(intervalo: String): String =
@@ -1132,8 +1133,7 @@ private fun FolhaVeiculo(
     var reparo by remember { mutableStateOf(inicial?.reparo ?: "") }
     var intervalo by remember { mutableStateOf(inicial?.intervalo ?: AUTOMATICO) }
     var confirmarExcluir by remember { mutableStateOf(false) }
-    val configFolha = remember { Configuracoes(context) }
-    var responsavel by remember { mutableStateOf(inicial?.responsavel ?: configFolha.ultimoResponsavel) }
+    var responsavel by remember { mutableStateOf(inicial?.responsavel ?: "") }
     val fotos = remember { mutableStateListOf<String>().apply { addAll(inicial?.fotos ?: emptyList()) } }
     val fotosOriginais = remember { inicial?.fotos ?: emptyList() }
     var fotoPendente by remember { mutableStateOf<File?>(null) }
@@ -1343,6 +1343,17 @@ private fun FolhaVeiculo(
                         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
                         modifier = Modifier.fillMaxWidth()
                     )
+                    Spacer(Modifier.height(8.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        RESPONSAVEIS.forEach { resp ->
+                            val marcado = responsavel.trim().equals(resp, ignoreCase = true)
+                            Chip(texto = resp, selecionado = marcado,
+                                onClick = { responsavel = if (marcado) "" else resp })
+                        }
+                    }
 
                     Spacer(Modifier.height(14.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1384,7 +1395,6 @@ private fun FolhaVeiculo(
                                 else -> {
                                     // Enviar também salva o veículo na lista (novo ou edição).
                                     Fotos.apagar((fotosOriginais + fotos).distinct().filter { it !in r.fotos })
-                                    if (!r.responsavel.isNullOrBlank()) configFolha.ultimoResponsavel = r.responsavel
                                     onSalvar(r)
                                     enviarWhatsAppComFotos(context, Formatador.negado(r), r.fotos)
                                 }
@@ -1443,7 +1453,6 @@ private fun FolhaVeiculo(
                         } else {
                             // Apaga as fotos que saíram (removidas, ou o carro deixou de ser Reparo).
                             Fotos.apagar((fotosOriginais + fotos).distinct().filter { it !in r.fotos })
-                            if (!r.responsavel.isNullOrBlank()) configFolha.ultimoResponsavel = r.responsavel
                             onSalvar(r)
                         }
                     },

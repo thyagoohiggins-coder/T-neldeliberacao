@@ -57,6 +57,14 @@ object Formatador {
             "*APROVADO:* ${e.aprov ?: ""}\n" +
             "*DIFERENÇA:* ${e.dif ?: ""}"
 
+    /** Mensagem de veículo negado (Reparo), enviada junto com as fotos do demérito. */
+    fun negado(r: Registro): String =
+        "*Veículo negado túnel*\n\n" +
+            "*Vin:* *${r.vin}*\n" +
+            "*Modelo:* *${r.modelo.orEmpty()}*\n" +
+            "*NC:* *${r.reparo.orEmpty()}*\n" +
+            "*Responsável:* *${r.responsavel.orEmpty()}*"
+
     /** Mensagem de um único intervalo, com o cabeçalho do fechamento. */
     fun intervalo(intervalo: String, registros: List<Registro>): String =
         CABECALHO + "\n\n" + bloco(faixa(intervalo), estatistica(intervalo, registros))

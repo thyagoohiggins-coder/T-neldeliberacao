@@ -10,6 +10,11 @@ import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.ui.layout.ContentScale
+import java.io.File
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -376,6 +381,7 @@ fun TunelApp() {
                 editando = null
             },
             onExcluir = {
+                Fotos.apagar(atual.fotos)
                 registros.removeAll { it.ordem == atual.ordem }
                 selecionados.remove(atual.ordem)
                 persistir()
@@ -436,6 +442,7 @@ fun TunelApp() {
             confirmButton = {
                 Button(
                     onClick = {
+                        Fotos.apagar(registros.filter { it.ordem in selecionados }.flatMap { it.fotos })
                         registros.removeAll { it.ordem in selecionados }
                         selecionados.clear()
                         persistir()
@@ -574,6 +581,7 @@ fun TunelApp() {
             confirmButton = {
                 Button(
                     onClick = {
+                        Fotos.apagar(registros.flatMap { it.fotos })
                         registros.clear(); selecionados.clear(); seq = 0
                         persistir()
                         confirmarLimpar = false
@@ -915,7 +923,70 @@ private fun LinhaVeiculo(
             }
         }
         Spacer(Modifier.width(8.dp))
-        Pilula(rotuloStatus(r.status), corSt)
+        Column(horizontalAlignment = Alignment.End) {
+            Pilula(rotuloStatus(r.status), corSt)
+            if (r.status == Status.REPARO && !modoSelecao) {
+                val context = LocalContext.current
+                TextButton(
+                    onClick = { enviarWhatsAppComFotos(context, Formatador.negado(r), r.fotos) },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                    modifier = Modifier.height(32.dp)
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null,
+                        tint = Cores.WhatsApp, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(if (r.fotos.isEmpty()) "Enviar NC" else "Enviar NC • ${r.fotos.size}📷",
+                        color = Cores.WhatsApp, style = MaterialTheme.typography.labelMedium)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MiniaturaFoto(caminho: String, onRemover: () -> Unit) {
+    val bmp = remember(caminho) { Fotos.miniatura(caminho) }
+    Box(
+        Modifier
+            .size(84.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Cores.SuperficieAlta)
+    ) {
+        if (bmp != null) {
+            Image(bmp, contentDescription = "Foto do demérito", contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize())
+        }
+        Box(
+            Modifier
+                .align(Alignment.TopEnd)
+                .padding(4.dp)
+                .size(24.dp)
+                .clip(CircleShape)
+                .background(Color(0xAA000000))
+                .combinedClickable(onClick = onRemover),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Filled.Close, contentDescription = "Remover foto", tint = Color.White,
+                modifier = Modifier.size(14.dp))
+        }
+    }
+}
+
+@Composable
+private fun BotaoFoto(icone: androidx.compose.ui.graphics.vector.ImageVector, rotulo: String, onClick: () -> Unit) {
+    Column(
+        Modifier
+            .size(84.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Cores.SuperficieAlta)
+            .border(1.dp, Cores.Borda, RoundedCornerShape(12.dp))
+            .combinedClickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(icone, contentDescription = null, tint = Cores.Azul)
+        Spacer(Modifier.height(4.dp))
+        Text(rotulo, style = MaterialTheme.typography.labelSmall, color = Cores.TextoSuave)
     }
 }
 
@@ -946,10 +1017,59 @@ private fun FolhaVeiculo(
     var reparo by remember { mutableStateOf(inicial?.reparo ?: "") }
     var intervalo by remember { mutableStateOf(inicial?.intervalo ?: AUTOMATICO) }
     var confirmarExcluir by remember { mutableStateOf(false) }
+    val configFolha = remember { Configuracoes(context) }
+    var responsavel by remember { mutableStateOf(inicial?.responsavel ?: configFolha.ultimoResponsavel) }
+    val fotos = remember { mutableStateListOf<String>().apply { addAll(inicial?.fotos ?: emptyList()) } }
+    val fotosOriginais = remember { inicial?.fotos ?: emptyList() }
+    var fotoPendente by remember { mutableStateOf<File?>(null) }
+
+    val tirarFoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val f = fotoPendente
+        if (f != null) {
+            if (ok && f.exists() && f.length() > 0) fotos.add(f.absolutePath) else f.delete()
+        }
+        fotoPendente = null
+    }
+    val escolherFotos = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        uris.forEach { u -> Fotos.copiarDaGaleria(context, u)?.let { fotos.add(it) } }
+    }
+
+    /** Fecha sem salvar: apaga só as fotos novas desta edição. */
+    fun descartar() {
+        Fotos.apagar(fotos.filter { it !in fotosOriginais })
+        onFechar()
+    }
 
     fun intervaloAgora(): String {
         val c = Calendar.getInstance()
         return Intervalos.atual(c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), adiantar)
+    }
+
+    /** Registro com o que está na tela (null se o VIN estiver vazio). */
+    fun montar(): Registro? {
+        val digitado = vin.trim()
+        // Se colou o VIN completo (17 caracteres já com "VB"), não duplica o prefixo.
+        val v = when {
+            digitado.isBlank() -> return null
+            !usarPrefixo -> digitado
+            digitado.startsWith(PREFIXO_VIN) && digitado.length >= 17 -> digitado
+            else -> PREFIXO_VIN + digitado
+        }
+        val rep = reparo.trim()
+        // Reparo sem descrição = Fazendo Inspeção 360 (não contabiliza).
+        val st = if (status == Status.REPARO && rep.isEmpty()) null else status
+        val ehReparo = st == Status.REPARO
+        return Registro(
+            vin = v,
+            modelo = modelo,
+            cor = cor,
+            status = st,
+            reparo = if (ehReparo) rep else null,
+            intervalo = if (intervalo == AUTOMATICO) intervaloAgora() else intervalo,
+            ordem = inicial?.ordem ?: 0,
+            responsavel = if (ehReparo) responsavel.trim().ifEmpty { null } else null,
+            fotos = if (ehReparo) fotos.toList() else emptyList()
+        )
     }
 
     val coresCampo = OutlinedTextFieldDefaults.colors(
@@ -960,7 +1080,7 @@ private fun FolhaVeiculo(
     )
 
     ModalBottomSheet(
-        onDismissRequest = onFechar,
+        onDismissRequest = { descartar() },
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = Cores.Superficie
     ) {
@@ -1068,6 +1188,65 @@ private fun FolhaVeiculo(
                             }
                         }
                     }
+
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = responsavel,
+                        onValueChange = { responsavel = it },
+                        label = { Text("Responsável") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = coresCampo,
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(Modifier.height(14.dp))
+                    Text("Fotos do demérito", fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.titleSmall)
+                    Spacer(Modifier.height(8.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        fotos.toList().forEach { caminho ->
+                            MiniaturaFoto(caminho, onRemover = { fotos.remove(caminho) })
+                        }
+                        BotaoFoto(Icons.Filled.PhotoCamera, "Câmera") {
+                            val f = Fotos.novoArquivo(context)
+                            fotoPendente = f
+                            tirarFoto.launch(Fotos.uriDe(context, f))
+                        }
+                        BotaoFoto(Icons.Filled.AddPhotoAlternate, "Galeria") {
+                            escolherFotos.launch("image/*")
+                        }
+                    }
+
+                    Spacer(Modifier.height(14.dp))
+                    Button(
+                        onClick = {
+                            val r = montar()
+                            when {
+                                r == null -> Toast.makeText(context, "Digite o VIN.", Toast.LENGTH_SHORT).show()
+                                r.status != Status.REPARO ->
+                                    Toast.makeText(context, "Escreva o reparo (NC) antes de enviar.",
+                                        Toast.LENGTH_SHORT).show()
+                                else -> enviarWhatsAppComFotos(context, Formatador.negado(r), r.fotos)
+                            }
+                        },
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Cores.WhatsApp.copy(alpha = 0.18f),
+                            contentColor = Cores.WhatsApp
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Enviar veículo negado (${fotos.size} foto(s))", fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
 
@@ -1102,31 +1281,14 @@ private fun FolhaVeiculo(
                 }
                 Button(
                     onClick = {
-                        val digitado = vin.trim()
-                        // Se colou o VIN completo (17 caracteres já com "VB"), não duplica o prefixo.
-                        val v = when {
-                            digitado.isBlank() -> ""
-                            !usarPrefixo -> digitado
-                            digitado.startsWith(PREFIXO_VIN) && digitado.length >= 17 -> digitado
-                            else -> PREFIXO_VIN + digitado
-                        }
-                        if (v.isBlank()) {
+                        val r = montar()
+                        if (r == null) {
                             Toast.makeText(context, "Digite o VIN.", Toast.LENGTH_SHORT).show()
                         } else {
-                            val rep = reparo.trim()
-                            // Reparo sem descrição = Fazendo Inspeção 360 (não contabiliza).
-                            val st = if (status == Status.REPARO && rep.isEmpty()) null else status
-                            onSalvar(
-                                Registro(
-                                    vin = v,
-                                    modelo = modelo,
-                                    cor = cor,
-                                    status = st,
-                                    reparo = if (st == Status.REPARO) rep else null,
-                                    intervalo = if (intervalo == AUTOMATICO) intervaloAgora() else intervalo,
-                                    ordem = inicial?.ordem ?: 0
-                                )
-                            )
+                            // Apaga as fotos que saíram (removidas, ou o carro deixou de ser Reparo).
+                            Fotos.apagar((fotosOriginais + fotos).distinct().filter { it !in r.fotos })
+                            if (!r.responsavel.isNullOrBlank()) configFolha.ultimoResponsavel = r.responsavel
+                            onSalvar(r)
                         }
                     },
                     shape = RoundedCornerShape(14.dp),
@@ -1150,7 +1312,11 @@ private fun FolhaVeiculo(
             text = { Text("O veículo será removido. Não dá para desfazer.") },
             confirmButton = {
                 Button(
-                    onClick = { confirmarExcluir = false; onExcluir() },
+                    onClick = {
+                        confirmarExcluir = false
+                        Fotos.apagar(fotos.filter { it !in fotosOriginais })
+                        onExcluir()
+                    },
                     colors = ButtonDefaults.buttonColors(containerColor = Cores.Vermelho)
                 ) { Text("Excluir") }
             },

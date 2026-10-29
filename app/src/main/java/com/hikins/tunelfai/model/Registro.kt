@@ -25,7 +25,9 @@ data class Registro(
     val status: Status?,      // null = Fazendo Inspeção 360
     val reparo: String?,      // descrição do reparo (só quando REPARO)
     val intervalo: String,    // ex.: "13:00"
-    val ordem: Long
+    val ordem: Long,
+    val responsavel: String? = null,          // responsável pelo reparo (só quando REPARO)
+    val fotos: List<String> = emptyList()     // caminhos das fotos do demérito (só quando REPARO)
 ) {
     /** Só entra na Produção quem já tem status (Aprovado ou Reparo). */
     val contabiliza: Boolean get() = status != null

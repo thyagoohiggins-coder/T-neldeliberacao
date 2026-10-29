@@ -51,7 +51,10 @@ class Repositorio(context: Context) {
                     status = status,
                     reparo = reparo,
                     intervalo = o.getString("intervalo"),
-                    ordem = o.getLong("ordem")
+                    ordem = o.getLong("ordem"),
+                    responsavel = o.textoOuNull("responsavel"),
+                    fotos = o.optJSONArray("fotos")?.let { f -> (0 until f.length()).map { f.getString(it) } }
+                        ?: emptyList()
                 )
             }
 
@@ -75,6 +78,8 @@ class Repositorio(context: Context) {
                     .put("reparo", r.reparo ?: "")
                     .put("intervalo", r.intervalo)
                     .put("ordem", r.ordem)
+                    .put("responsavel", r.responsavel ?: "")
+                    .put("fotos", JSONArray(r.fotos))
             )
         }
         raiz.put("registros", arr)

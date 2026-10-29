@@ -18,6 +18,11 @@ class Configuracoes(context: Context) {
         get() = prefs.getBoolean("lembretes", false)
         set(v) = prefs.edit().putBoolean("lembretes", v).apply()
 
+    /** Último responsável digitado (já vem preenchido no próximo reparo). */
+    var ultimoResponsavel: String
+        get() = prefs.getString("ultimo_responsavel", "") ?: ""
+        set(v) = prefs.edit().putString("ultimo_responsavel", v).apply()
+
     /** Banco de reparos pré-definidos, sugeridos ao escrever o reparo de um veículo. */
     var reparos: List<String>
         get() {

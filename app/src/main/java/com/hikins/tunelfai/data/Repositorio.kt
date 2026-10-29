@@ -1,6 +1,7 @@
 package com.hikins.tunelfai.data
 
 import android.content.Context
+import com.hikins.tunelfai.model.Catalogo
 import com.hikins.tunelfai.model.Registro
 import com.hikins.tunelfai.model.Status
 import org.json.JSONArray
@@ -46,8 +47,7 @@ class Repositorio(context: Context) {
                 }
                 registros += Registro(
                     vin = o.getString("vin"),
-                    // "Tiggo 7" foi renomeado para "Tiggo 7 Pro Adas".
-                    modelo = o.textoOuNull("modelo")?.let { if (it == "Tiggo 7") "Tiggo 7 Pro Adas" else it },
+                    modelo = o.textoOuNull("modelo")?.let { Catalogo.nomeAtual(it) },
                     cor = o.textoOuNull("cor"),
                     status = status,
                     reparo = reparo,

@@ -51,9 +51,6 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Settings
-import com.google.mlkit.vision.barcode.common.Barcode
-import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
-import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import com.hikins.tunelfai.model.Vin
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -191,6 +188,7 @@ fun TunelApp() {
 
     var adiantar by remember { mutableStateOf(config.adiantarIntervalo) }
     var lembretes by remember { mutableStateOf(config.lembretes) }
+    var autoModeloCfg by remember { mutableStateOf(config.autoModelo) }
     var metasEditadas by remember {
         mutableStateOf(config.metas.also { Intervalos.definirMetas(it) })
     }
@@ -593,6 +591,13 @@ fun TunelApp() {
                         "intervalo, o carro já entra no intervalo seguinte.",
                     marcado = adiantar,
                     onMudar = { adiantar = it; config.adiantarIntervalo = it }
+                )
+                LinhaSwitch(
+                    titulo = "Modelo automático pelo VIN",
+                    descricao = "Ao digitar ou ler o chassi, o modelo é escolhido pelo prefixo " +
+                        "(ex.: 95PLDL61DVB → Uni-T).",
+                    marcado = autoModeloCfg,
+                    onMudar = { autoModeloCfg = it; config.autoModelo = it }
                 )
                 LinhaSwitch(
                     titulo = "Lembrete de fechamento",
@@ -1333,6 +1338,15 @@ private fun FolhaVeiculo(
     var reparo by remember { mutableStateOf(inicial?.reparo ?: "") }
     var intervalo by remember { mutableStateOf(inicial?.intervalo ?: AUTOMATICO) }
     var confirmarExcluir by remember { mutableStateOf(false) }
+    var abrirScanner by remember { mutableStateOf(false) }
+    val autoModelo = remember { Configuracoes(context).autoModelo }
+
+    /** Auxílio: escolhe o modelo pelo prefixo do chassi (pode ser desligado nas configurações). */
+    fun detectarModelo() {
+        if (!autoModelo) return
+        val completo = if (usarPrefixo) PREFIXO_VIN + vin else vin
+        Catalogo.detectar(completo)?.let { modelo = it.nome }
+    }
     var responsavel by remember { mutableStateOf(inicial?.responsavel ?: "") }
     val fotos = remember { mutableStateListOf<String>().apply { addAll(inicial?.fotos ?: emptyList()) } }
     val fotosOriginais = remember { inicial?.fotos ?: emptyList() }
@@ -1410,7 +1424,13 @@ private fun FolhaVeiculo(
 
             OutlinedTextField(
                 value = vin,
-                onValueChange = { vin = it.uppercase() },
+                onValueChange = { novo ->
+                    val t = novo.uppercase()
+                    // Chassi completo digitado (começa com 95P): tira o prefixo VB automático.
+                    if (usarPrefixo && t.startsWith("95P")) usarPrefixo = false
+                    vin = t
+                    detectarModelo()
+                },
                 label = { Text("VIN") },
                 prefix = if (usarPrefixo) {
                     { Text(PREFIXO_VIN, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold,
@@ -1418,30 +1438,7 @@ private fun FolhaVeiculo(
                 } else null,
                 leadingIcon = { Icon(Icons.Filled.DirectionsCar, contentDescription = null) },
                 trailingIcon = {
-                    IconButton(onClick = {
-                        val opcoes = GmsBarcodeScannerOptions.Builder()
-                            .setBarcodeFormats(
-                                Barcode.FORMAT_CODE_128, Barcode.FORMAT_CODE_39, Barcode.FORMAT_CODE_93,
-                                Barcode.FORMAT_DATA_MATRIX, Barcode.FORMAT_QR_CODE
-                            )
-                            .enableAutoZoom()
-                            .build()
-                        GmsBarcodeScanning.getClient(context, opcoes).startScan()
-                            .addOnSuccessListener { codigo ->
-                                val lido = Vin.limpar(codigo.rawValue.orEmpty())
-                                if (lido.isEmpty()) {
-                                    Toast.makeText(context, "Código vazio, tente de novo.", Toast.LENGTH_SHORT).show()
-                                } else {
-                                    usarPrefixo = false
-                                    vin = lido
-                                    Toast.makeText(context, "VIN lido: $lido", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                            .addOnFailureListener {
-                                Toast.makeText(context, "Não foi possível abrir o leitor de código de barras.",
-                                    Toast.LENGTH_LONG).show()
-                            }
-                    }) {
+                    IconButton(onClick = { abrirScanner = true }) {
                         Icon(Icons.Filled.QrCodeScanner, contentDescription = "Ler código de barras do chassi",
                             tint = Cores.Azul)
                     }
@@ -1461,7 +1458,8 @@ private fun FolhaVeiculo(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Catalogo.modelos.forEach { m ->
+                    Catalogo.modelos.forEach { mod ->
+                        val m = mod.nome
                         Chip(texto = m, selecionado = modelo == m,
                             onClick = { modelo = if (modelo == m) null else m })
                     }
@@ -1668,6 +1666,24 @@ private fun FolhaVeiculo(
                 }
             }
         }
+    }
+
+    if (abrirScanner) {
+        ScannerCodigo(
+            onLido = { bruto ->
+                abrirScanner = false
+                val lido = Vin.limpar(bruto)
+                if (lido.isEmpty()) {
+                    Toast.makeText(context, "Código vazio, tente de novo.", Toast.LENGTH_SHORT).show()
+                } else {
+                    usarPrefixo = false
+                    vin = lido
+                    detectarModelo()
+                    Toast.makeText(context, "VIN lido: $lido", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onFechar = { abrirScanner = false }
+        )
     }
 
     if (confirmarExcluir && onExcluir != null) {

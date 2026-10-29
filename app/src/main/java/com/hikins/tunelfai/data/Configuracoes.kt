@@ -13,6 +13,11 @@ class Configuracoes(context: Context) {
         get() = prefs.getBoolean("adiantar_intervalo", false)
         set(v) = prefs.edit().putBoolean("adiantar_intervalo", v).apply()
 
+    /** Seleciona o modelo automaticamente pelo prefixo do chassi (digitado ou lido no código). */
+    var autoModelo: Boolean
+        get() = prefs.getBoolean("auto_modelo", true)
+        set(v) = prefs.edit().putBoolean("auto_modelo", v).apply()
+
     /** Lembrete de fechamento 15 min antes de cada intervalo. */
     var lembretes: Boolean
         get() = prefs.getBoolean("lembretes", false)

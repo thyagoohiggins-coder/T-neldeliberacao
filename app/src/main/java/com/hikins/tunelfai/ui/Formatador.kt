@@ -97,11 +97,9 @@ object Formatador {
     /** Título da mensagem de um intervalo específico (negrito + itálico). */
     private const val CABECALHO_INTERVALO = "*_H/H LIBERAÇÃO TUNEL_*"
 
-    /** Mensagem de um único intervalo, seguida do TOTAL do dia. */
+    /** Mensagem de um único intervalo (o TOTAL vai só no fechamento do dia). */
     fun intervalo(intervalo: String, registros: List<Registro>): String =
-        CABECALHO_INTERVALO + "\n\n" +
-            bloco(faixa(intervalo), estatistica(intervalo, registros)) + "\n\n" +
-            bloco("TOTAL", estatisticaTotal(registros))
+        CABECALHO_INTERVALO + "\n\n" + bloco(faixa(intervalo), estatistica(intervalo, registros))
 
     /** Fechamento completo: todos os intervalos (06:00 a 15:00) e o TOTAL. */
     fun total(registros: List<Registro>): String {

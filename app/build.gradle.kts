@@ -84,4 +84,6 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    // Leitor de código de barras do chassi (Google Play Services, sem permissão de câmera)
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
 }

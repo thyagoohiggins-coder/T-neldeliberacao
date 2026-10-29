@@ -50,7 +50,12 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Settings
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
+import com.hikins.tunelfai.model.Vin
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -1212,6 +1217,34 @@ private fun FolhaVeiculo(
                         color = Cores.Azul) }
                 } else null,
                 leadingIcon = { Icon(Icons.Filled.DirectionsCar, contentDescription = null) },
+                trailingIcon = {
+                    IconButton(onClick = {
+                        val opcoes = GmsBarcodeScannerOptions.Builder()
+                            .setBarcodeFormats(
+                                Barcode.FORMAT_CODE_128, Barcode.FORMAT_CODE_39, Barcode.FORMAT_CODE_93,
+                                Barcode.FORMAT_DATA_MATRIX, Barcode.FORMAT_QR_CODE
+                            )
+                            .enableAutoZoom()
+                            .build()
+                        GmsBarcodeScanning.getClient(context, opcoes).startScan()
+                            .addOnSuccessListener { codigo ->
+                                val lido = Vin.doCodigo(codigo.rawValue.orEmpty())
+                                if (lido.isEmpty()) {
+                                    Toast.makeText(context, "Código vazio, tente de novo.", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    vin = if (usarPrefixo) lido.removePrefix(PREFIXO_VIN) else lido
+                                    Toast.makeText(context, "VIN lido: $lido", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                            .addOnFailureListener {
+                                Toast.makeText(context, "Não foi possível abrir o leitor de código de barras.",
+                                    Toast.LENGTH_LONG).show()
+                            }
+                    }) {
+                        Icon(Icons.Filled.QrCodeScanner, contentDescription = "Ler código de barras do chassi",
+                            tint = Cores.Azul)
+                    }
+                },
                 singleLine = true,
                 shape = RoundedCornerShape(14.dp),
                 colors = coresCampo,

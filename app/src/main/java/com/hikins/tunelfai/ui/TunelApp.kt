@@ -49,6 +49,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -63,6 +64,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -171,6 +173,9 @@ fun TunelApp() {
     val bancoReparos = remember { mutableStateListOf<String>().apply { addAll(config.reparos) } }
     var novoReparo by remember { mutableStateOf("") }
     var agora by remember { mutableStateOf(Calendar.getInstance()) }
+    var buscando by remember { mutableStateOf(false) }
+    var busca by remember { mutableStateOf("") }
+    var destacarRepetidos by remember { mutableStateOf(false) }
 
     val pedirNotificacao = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -209,8 +214,14 @@ fun TunelApp() {
     }
 
     val emAndamento = intervaloEmAndamento(agora)
-    val intervalosPresentes = registros.map { it.intervalo }.distinct().sortedDescending()
     val modoSelecao = selecionados.isNotEmpty()
+    val filtro = busca.trim().uppercase()
+    // Quantas vezes cada VIN aparece (para destacar os repetidos).
+    val contagemVin = registros.groupingBy { it.vin.uppercase() }.eachCount()
+    val qtdRepetidos = contagemVin.count { it.value > 1 }
+    val intervalosPresentes = registros
+        .filter { filtro.isEmpty() || it.vin.uppercase().contains(filtro) }
+        .map { it.intervalo }.distinct().sortedDescending()
 
     fun alternar(id: Long) {
         if (id in selecionados) selecionados.remove(id) else selecionados.add(id)
@@ -258,6 +269,13 @@ fun TunelApp() {
                         }
                     },
                     actions = {
+                        IconButton(onClick = {
+                            buscando = !buscando
+                            if (!buscando) busca = ""
+                        }) {
+                            Icon(Icons.Filled.Search, contentDescription = "Buscar VIN",
+                                tint = if (buscando) Cores.Azul else LocalContentColor.current)
+                        }
                         IconButton(onClick = { mostrarConfig = true }) {
                             Icon(Icons.Filled.Settings, contentDescription = "Configurações")
                         }
@@ -325,13 +343,84 @@ fun TunelApp() {
                     emAndamento = emAndamento,
                     onClick = { intv ->
                         val i = intervalosPresentes.indexOf(intv)
-                        if (i >= 0) scope.launch { listState.animateScrollToItem(2 + i) }
+                        if (i >= 0) scope.launch { listState.animateScrollToItem(3 + i) }
                     }
                 )
             }
 
+            item(key = "ferramentas") {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (buscando) {
+                        OutlinedTextField(
+                            value = busca,
+                            onValueChange = { busca = it.uppercase() },
+                            placeholder = { Text("Buscar VIN") },
+                            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                            trailingIcon = {
+                                if (busca.isNotEmpty()) {
+                                    IconButton(onClick = { busca = "" }) {
+                                        Icon(Icons.Filled.Close, contentDescription = "Limpar busca")
+                                    }
+                                }
+                            },
+                            singleLine = true,
+                            shape = RoundedCornerShape(14.dp),
+                            textStyle = MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace),
+                            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Cores.Azul,
+                                unfocusedBorderColor = Cores.Borda,
+                                focusedContainerColor = Cores.Superficie,
+                                unfocusedContainerColor = Cores.Superficie
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    FilterChip(
+                        selected = destacarRepetidos,
+                        onClick = { destacarRepetidos = !destacarRepetidos },
+                        label = {
+                            Text(
+                                if (qtdRepetidos == 0) "Destacar VINs repetidos (nenhum)"
+                                else "Destacar VINs repetidos ($qtdRepetidos)",
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        },
+                        leadingIcon = {
+                            Box(
+                                Modifier
+                                    .size(10.dp)
+                                    .clip(CircleShape)
+                                    .background(if (qtdRepetidos > 0) Cores.Vermelho else Cores.TextoSuave)
+                            )
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = FilterChipDefaults.filterChipColors(
+                            containerColor = Cores.Superficie,
+                            labelColor = Cores.Texto,
+                            selectedContainerColor = Cores.Vermelho.copy(alpha = 0.18f),
+                            selectedLabelColor = Cores.Vermelho
+                        ),
+                        border = FilterChipDefaults.filterChipBorder(
+                            enabled = true,
+                            selected = destacarRepetidos,
+                            borderColor = Cores.Borda,
+                            selectedBorderColor = Cores.Vermelho
+                        )
+                    )
+                }
+            }
+
             if (registros.isEmpty()) {
                 item(key = "vazio") { EstadoVazio() }
+            } else if (intervalosPresentes.isEmpty()) {
+                item(key = "sem-resultado") {
+                    Text("Nenhum VIN encontrado para \"$filtro\".", color = Cores.TextoSuave,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 24.dp))
+                }
             }
 
             items(intervalosPresentes, key = { it }) { intervalo ->
@@ -340,6 +429,8 @@ fun TunelApp() {
                     registros = registros,
                     emAndamento = intervalo == emAndamento,
                     selecionados = selecionados,
+                    filtro = filtro,
+                    contagemVin = if (destacarRepetidos) contagemVin else emptyMap(),
                     onToque = { r -> if (modoSelecao) alternar(r.ordem) else editando = r },
                     onToqueLongo = { r -> alternar(r.ordem) },
                     onSelecionarGrupo = { ids ->
@@ -775,6 +866,8 @@ private fun CardIntervalo(
     registros: List<Registro>,
     emAndamento: Boolean,
     selecionados: List<Long>,
+    filtro: String,
+    contagemVin: Map<String, Int>,
     onToque: (Registro) -> Unit,
     onToqueLongo: (Registro) -> Unit,
     onSelecionarGrupo: (List<Long>) -> Unit,
@@ -827,14 +920,17 @@ private fun CardIntervalo(
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 doIntervalo.forEachIndexed { i, r ->
-                    LinhaVeiculo(
-                        numero = i + 1,
-                        r = r,
-                        modoSelecao = modoSelecao,
-                        selecionado = r.ordem in selecionados,
-                        onToque = { onToque(r) },
-                        onToqueLongo = { onToqueLongo(r) }
-                    )
+                    if (filtro.isEmpty() || r.vin.uppercase().contains(filtro)) {
+                        LinhaVeiculo(
+                            numero = i + 1,
+                            r = r,
+                            vezes = contagemVin[r.vin.uppercase()] ?: 1,
+                            modoSelecao = modoSelecao,
+                            selecionado = r.ordem in selecionados,
+                            onToque = { onToque(r) },
+                            onToqueLongo = { onToqueLongo(r) }
+                        )
+                    }
                 }
             }
 
@@ -864,6 +960,7 @@ private fun CardIntervalo(
 private fun LinhaVeiculo(
     numero: Int,
     r: Registro,
+    vezes: Int,
     modoSelecao: Boolean,
     selecionado: Boolean,
     onToque: () -> Unit,
@@ -875,7 +972,15 @@ private fun LinhaVeiculo(
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(if (selecionado) Cores.AzulEscuro else Cores.SuperficieAlta)
-            .border(1.dp, if (selecionado) Cores.Azul else Color.Transparent, RoundedCornerShape(14.dp))
+            .border(
+                if (vezes > 1) 1.5.dp else 1.dp,
+                when {
+                    selecionado -> Cores.Azul
+                    vezes > 1 -> Cores.Vermelho
+                    else -> Color.Transparent
+                },
+                RoundedCornerShape(14.dp)
+            )
             .combinedClickable(onClick = onToque, onLongClick = onToqueLongo)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -902,6 +1007,10 @@ private fun LinhaVeiculo(
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(r.vin, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 15.sp,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (vezes > 1) {
+                Text("VIN repetido • aparece ${vezes}x", color = Cores.Vermelho,
+                    fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelSmall)
+            }
             if (r.modelo != null || r.cor != null) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (r.cor != null) {

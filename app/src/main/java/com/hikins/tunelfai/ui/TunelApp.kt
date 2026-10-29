@@ -151,7 +151,7 @@ private data class Rascunho(
 )
 private const val PREFIXO_VIN = "VB"
 private const val MAX_FOTOS = 4
-private val RESPONSAVEIS = listOf("Trim Shop", "Small", "Fai", "Paint", "CKD", "Logística")
+private val RESPONSAVEIS = listOf("Trim Shop", "Body Shop", "Small", "Fai", "Paint", "CKD", "Logística")
 
 /** "06:00" -> "06:00 – 07:00" (versão de tela; a mensagem usa Formatador.faixa). */
 private fun faixaCurta(intervalo: String): String =

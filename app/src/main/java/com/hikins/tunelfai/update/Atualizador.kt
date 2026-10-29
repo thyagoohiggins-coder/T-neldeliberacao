@@ -36,9 +36,50 @@ object Atualizador {
         "0"
     }
 
-    /** Consulta a última release. Retorna null em caso de erro de rede. */
+    private const val PAGINA_LATEST =
+        "https://github.com/thyagoohiggins-coder/T-neldeliberacao/releases/latest"
+    private const val BASE_DOWNLOAD =
+        "https://github.com/thyagoohiggins-coder/T-neldeliberacao/releases/download"
+
+    /**
+     * Consulta a última release. Tenta a API do GitHub e, se falhar (ex.: limite de 60
+     * consultas/hora por IP na rede da operadora), usa o redirecionamento da página "latest".
+     * Retorna null só se as duas falharem.
+     */
     suspend fun verificar(context: Context): InfoAtualizacao? = withContext(Dispatchers.IO) {
-        try {
+        viaApi(context) ?: viaRedirecionamento(context)
+    }
+
+    /** Plano B: /releases/latest redireciona para .../tag/vX.Y; o APK tem nome fixo por versão. */
+    private fun viaRedirecionamento(context: Context): InfoAtualizacao? = try {
+        val conn = (URL(PAGINA_LATEST).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            instanceFollowRedirects = false
+            setRequestProperty("User-Agent", "TunelFAI-App")
+            connectTimeout = 15000
+            readTimeout = 15000
+        }
+        val destino = conn.getHeaderField("Location").orEmpty()
+        conn.disconnect()
+        val tagCompleta = destino.substringAfterLast("/tag/", "")
+        if (tagCompleta.isBlank()) {
+            null
+        } else {
+            val tag = tagCompleta.removePrefix("v").trim()
+            val atual = versaoAtual(context)
+            InfoAtualizacao(
+                temNova = comparar(tag, atual) > 0,
+                versaoAtual = atual,
+                versaoNova = tag,
+                urlApk = "$BASE_DOWNLOAD/$tagCompleta/HoraAHora-TunelFAI-v$tag.apk"
+            )
+        }
+    } catch (e: Exception) {
+        null
+    }
+
+    private fun viaApi(context: Context): InfoAtualizacao? {
+        return try {
             val conn = (URL(API_LATEST).openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 setRequestProperty("Accept", "application/vnd.github+json")
@@ -46,7 +87,7 @@ object Atualizador {
                 connectTimeout = 15000
                 readTimeout = 15000
             }
-            if (conn.responseCode != 200) return@withContext null
+            if (conn.responseCode != 200) return null
             val corpo = conn.inputStream.bufferedReader().use { it.readText() }
             val json = JSONObject(corpo)
 

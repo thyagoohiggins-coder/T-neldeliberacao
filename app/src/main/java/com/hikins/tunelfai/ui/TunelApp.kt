@@ -229,6 +229,8 @@ fun TunelApp() {
     var autoModeloCfg by remember { mutableStateOf(config.autoModelo) }
     var avisoFechamentoCfg by remember { mutableStateOf(config.avisoFechamento) }
     var mostrarAvisoFechamento by remember { mutableStateOf(false) }
+    var avisoIntervaloCfg by remember { mutableStateOf(config.avisoIntervalo) }
+    var avisoIntervalo by remember { mutableStateOf<String?>(null) }
     remember { PreferenciasUi.mostrarLogos = config.mostrarLogos }
     var metasEditadas by remember {
         mutableStateOf(config.metas.also { Intervalos.definirMetas(it) })
@@ -651,6 +653,13 @@ fun TunelApp() {
                     onMudar = { PreferenciasUi.mostrarLogos = it; config.mostrarLogos = it }
                 )
                 LinhaSwitch(
+                    titulo = "Aviso de envio de cada intervalo",
+                    descricao = "No fim de cada intervalo (06:45 até 14:45), ao abrir ou usar o app, " +
+                        "aparece no meio da tela o lembrete para enviar aquele intervalo.",
+                    marcado = avisoIntervaloCfg,
+                    onMudar = { avisoIntervaloCfg = it; config.avisoIntervalo = it }
+                )
+                LinhaSwitch(
                     titulo = "Aviso de fechamento às 15:35",
                     descricao = "A partir das 15:35, ao abrir ou usar o app, aparece no meio da tela " +
                         "o lembrete para enviar o fechamento do túnel (uma vez por dia).",
@@ -940,6 +949,46 @@ fun TunelApp() {
             mostrarAvisoFechamento = true
         }
     }
+    // Aviso de cada intervalo: na janela XX:45 até (XX+1):45, uma vez por intervalo por dia.
+    LaunchedEffect(agora, avisoIntervaloCfg) {
+        if (!avisoIntervaloCfg) return@LaunchedEffect
+        val minutos = agora.get(Calendar.HOUR_OF_DAY) * 60 + agora.get(Calendar.MINUTE)
+        val hora = (6..14).firstOrNull { h -> minutos in (h * 60 + 45) until ((h + 1) * 60 + 45) }
+            ?: return@LaunchedEffect
+        val intv = "%02d:00".format(hora)
+        val chave = "$hojeTexto $intv"
+        if (config.avisoIntervaloUltimo != chave) {
+            config.avisoIntervaloUltimo = chave
+            avisoIntervalo = intv
+        }
+    }
+    avisoIntervalo?.let { intv ->
+        AlertDialog(
+            onDismissRequest = { avisoIntervalo = null },
+            containerColor = Cores.Superficie,
+            icon = { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, tint = Cores.WhatsApp) },
+            title = { Text("Fim do intervalo", textAlign = TextAlign.Center) },
+            text = {
+                Text(
+                    "O intervalo ${faixaCurta(intv)} está acabando. Que tal enviar o H/H dele no WhatsApp?",
+                    textAlign = TextAlign.Center
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        avisoIntervalo = null
+                        enviarWhatsApp(context, Formatador.intervalo(intv, registros))
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Cores.WhatsApp, contentColor = Color.White)
+                ) { Text("Enviar intervalo") }
+            },
+            dismissButton = {
+                TextButton(onClick = { avisoIntervalo = null }) { Text("Depois") }
+            }
+        )
+    }
+
     if (mostrarAvisoFechamento) {
         AlertDialog(
             onDismissRequest = { mostrarAvisoFechamento = false },

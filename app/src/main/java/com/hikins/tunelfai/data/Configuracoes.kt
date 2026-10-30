@@ -58,6 +58,16 @@ class Configuracoes(context: Context) {
         get() = prefs.getBoolean("aviso_fechamento", true)
         set(v) = prefs.edit().putBoolean("aviso_fechamento", v).apply()
 
+    /** No fim de cada intervalo (XX:45), mostrar no app o aviso para enviar o intervalo. */
+    var avisoIntervalo: Boolean
+        get() = prefs.getBoolean("aviso_intervalo", true)
+        set(v) = prefs.edit().putBoolean("aviso_intervalo", v).apply()
+
+    /** Último aviso de intervalo mostrado ("yyyy-MM-dd 06:00"). */
+    var avisoIntervaloUltimo: String
+        get() = prefs.getString("aviso_intervalo_ultimo", "") ?: ""
+        set(v) = prefs.edit().putString("aviso_intervalo_ultimo", v).apply()
+
     /** Dia (yyyy-MM-dd) em que o aviso de fechamento já foi mostrado. */
     var avisoFechamentoDia: String
         get() = prefs.getString("aviso_fechamento_dia", "") ?: ""

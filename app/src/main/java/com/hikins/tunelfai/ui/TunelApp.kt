@@ -653,9 +653,9 @@ fun TunelApp() {
                     onMudar = { PreferenciasUi.mostrarLogos = it; config.mostrarLogos = it }
                 )
                 LinhaSwitch(
-                    titulo = "Aviso de envio de cada intervalo",
+                    titulo = "Aviso do H/H de cada intervalo",
                     descricao = "No fim de cada intervalo (06:45 até 14:45), ao abrir ou usar o app, " +
-                        "aparece no meio da tela o lembrete para enviar aquele intervalo.",
+                        "aparece no meio da tela o lembrete para enviar o H/H daquele intervalo.",
                     marcado = avisoIntervaloCfg,
                     onMudar = { avisoIntervaloCfg = it; config.avisoIntervalo = it }
                 )
@@ -667,7 +667,7 @@ fun TunelApp() {
                     onMudar = { avisoFechamentoCfg = it; config.avisoFechamento = it }
                 )
                 LinhaSwitch(
-                    titulo = "Lembrete de fechamento",
+                    titulo = "Lembrete do H/H do túnel de liberação",
                     descricao = "Notifica 15 min antes de cada intervalo (06:45 até 14:45) " +
                         "e às 15:35 no intervalo das 15:00.",
                     marcado = lembretes,
@@ -967,7 +967,7 @@ fun TunelApp() {
             onDismissRequest = { avisoIntervalo = null },
             containerColor = Cores.Superficie,
             icon = { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, tint = Cores.WhatsApp) },
-            title = { Text("Fim do intervalo", textAlign = TextAlign.Center) },
+            title = { Text("H/H do túnel de liberação", textAlign = TextAlign.Center) },
             text = {
                 Text(
                     "O intervalo ${faixaCurta(intv)} está acabando. Que tal enviar o H/H dele no WhatsApp?",

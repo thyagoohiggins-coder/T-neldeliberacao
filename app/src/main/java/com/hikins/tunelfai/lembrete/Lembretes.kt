@@ -76,7 +76,7 @@ object Lembretes {
         val nm = context.getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(CANAL) == null) {
             nm.createNotificationChannel(
-                NotificationChannel(CANAL, "Lembretes de fechamento", NotificationManager.IMPORTANCE_HIGH)
+                NotificationChannel(CANAL, "Lembretes do H/H do túnel", NotificationManager.IMPORTANCE_HIGH)
                     .apply { enableVibration(false) }
             )
         }
@@ -86,8 +86,8 @@ object Lembretes {
         )
         val n = NotificationCompat.Builder(context, CANAL)
             .setSmallIcon(android.R.drawable.ic_popup_reminder)
-            .setContentTitle("Fechamento do túnel")
-            .setContentText("Faça o fechamento dos veículos de ${Formatador.faixa(intervalo)}.")
+            .setContentTitle("H/H do túnel de liberação")
+            .setContentText("Envie o H/H de ${Formatador.faixa(intervalo)}.")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(abrir)
             .setAutoCancel(true)

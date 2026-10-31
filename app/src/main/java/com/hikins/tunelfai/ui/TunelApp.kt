@@ -44,6 +44,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DirectionsCar
@@ -147,7 +148,8 @@ private data class Rascunho(
     val fotos: List<String>,
     val intervalo: String,
     val motivo: String = "",
-    val observacao: String = ""
+    val observacao: String = "",
+    val okA: Boolean = false
 )
 private const val PREFIXO_VIN = "VB"
 private const val MAX_FOTOS = 4
@@ -1484,6 +1486,17 @@ private fun LinhaVeiculo(
                     LogoMarca(marca, 20.dp)
                     Spacer(Modifier.width(6.dp))
                 }
+                if (r.okA && (r.status == null || r.status == Status.APROVADO)) {
+                    Text(
+                        "OK A-", color = Cores.Verde, fontWeight = FontWeight.Bold, fontSize = 11.sp,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Cores.Verde.copy(alpha = 0.18f))
+                            .border(1.dp, Cores.Verde.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 6.dp, vertical = 1.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                }
                 // Chassi completo: na lista aparece só o final a partir de "VB" (ex.: VB003682).
                 val curto = vinCurto(r.vin)
                 Text(curto, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 15.sp,
@@ -1657,6 +1670,7 @@ private fun FolhaVeiculo(
     var responsavel by remember { mutableStateOf(inicial?.responsavel ?: r0?.responsavel ?: "") }
     var motivo by remember { mutableStateOf(inicial?.motivo ?: r0?.motivo ?: "") }
     var observacao by remember { mutableStateOf(inicial?.observacao ?: r0?.observacao ?: "") }
+    var okA by remember { mutableStateOf(inicial?.okA ?: r0?.okA ?: false) }
     val fotos = remember {
         mutableStateListOf<String>().apply { addAll(inicial?.fotos ?: r0?.fotos ?: emptyList()) }
     }
@@ -1715,10 +1729,10 @@ private fun FolhaVeiculo(
     fun rascunhoAtual(): Rascunho? {
         val vazio = vin.isBlank() && modelo == null && cor == null && status == null &&
             reparo.isBlank() && responsavel.isBlank() && fotos.isEmpty() && intervalo == AUTOMATICO &&
-            motivo.isBlank() && observacao.isBlank()
+            motivo.isBlank() && observacao.isBlank() && !okA
         return if (vazio) null else Rascunho(
             usarPrefixo, vin, modelo, cor, status, reparo, responsavel, fotos.toList(), intervalo,
-            motivo, observacao
+            motivo, observacao, okA
         )
     }
 
@@ -1727,7 +1741,7 @@ private fun FolhaVeiculo(
         Fotos.apagar(fotos.toList())
         fotos.clear()
         usarPrefixo = true; vin = ""; modelo = null; cor = null; status = null
-        reparo = ""; responsavel = ""; intervalo = AUTOMATICO; motivo = ""; observacao = ""
+        reparo = ""; responsavel = ""; intervalo = AUTOMATICO; motivo = ""; observacao = ""; okA = false
         onRascunho(null)
     }
 
@@ -1778,7 +1792,8 @@ private fun FolhaVeiculo(
             // Aprovado (liberado) não guarda fotos; nos outros status elas ficam.
             fotos = if (st == Status.APROVADO) emptyList() else fotos.toList(),
             motivo = if (ehBloqueioOuSeparado) motivo.trim().ifEmpty { null } else null,
-            observacao = if (ehBloqueioOuSeparado) observacao.trim().ifEmpty { null } else null
+            observacao = if (ehBloqueioOuSeparado) observacao.trim().ifEmpty { null } else null,
+            okA = okA && (st == null || st == Status.APROVADO)
         )
     }
 
@@ -1941,6 +1956,29 @@ private fun FolhaVeiculo(
                         shape = RoundedCornerShape(14.dp),
                         colors = coresCampo,
                         modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                if (status == null || status == Status.APROVADO) {
+                    Spacer(Modifier.height(10.dp))
+                    FilterChip(
+                        selected = okA,
+                        onClick = { okA = !okA },
+                        label = { Text("OK A-", fontWeight = FontWeight.Bold) },
+                        leadingIcon = if (okA) {
+                            { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                        } else null,
+                        shape = RoundedCornerShape(10.dp),
+                        colors = FilterChipDefaults.filterChipColors(
+                            containerColor = Cores.SuperficieAlta,
+                            labelColor = Cores.TextoSuave,
+                            selectedContainerColor = Cores.Verde.copy(alpha = 0.2f),
+                            selectedLabelColor = Cores.Verde,
+                            selectedLeadingIconColor = Cores.Verde
+                        ),
+                        border = FilterChipDefaults.filterChipBorder(
+                            enabled = true, selected = okA,
+                            borderColor = Cores.Borda, selectedBorderColor = Cores.Verde
+                        )
                     )
                 }
                 if (status == null) {

@@ -58,7 +58,8 @@ class Repositorio(context: Context) {
                         ?: emptyList(),
                     // "motivo" é usado pelos dados antigos (Negado); o texto livre fica em "motivoTexto".
                     motivo = o.textoOuNull("motivoTexto"),
-                    observacao = o.textoOuNull("observacao")
+                    observacao = o.textoOuNull("observacao"),
+                    okA = o.optBoolean("okA", false)
                 )
             }
 
@@ -86,6 +87,7 @@ class Repositorio(context: Context) {
                     .put("fotos", JSONArray(r.fotos))
                     .put("motivoTexto", r.motivo ?: "")
                     .put("observacao", r.observacao ?: "")
+                    .put("okA", r.okA)
             )
         }
         raiz.put("registros", arr)

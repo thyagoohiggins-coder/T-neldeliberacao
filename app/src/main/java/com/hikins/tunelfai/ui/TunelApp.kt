@@ -1486,7 +1486,7 @@ private fun LinhaVeiculo(
                     LogoMarca(marca, 20.dp)
                     Spacer(Modifier.width(6.dp))
                 }
-                if (r.okA && (r.status == null || r.status == Status.APROVADO)) {
+                if (r.okA && (r.status == null || r.status == Status.APROVADO || r.status == Status.REPARO)) {
                     Text(
                         "OK A-", color = Cores.Ambar, fontWeight = FontWeight.Bold, fontSize = 11.sp,
                         modifier = Modifier
@@ -1793,7 +1793,7 @@ private fun FolhaVeiculo(
             fotos = if (st == Status.APROVADO) emptyList() else fotos.toList(),
             motivo = if (ehBloqueioOuSeparado) motivo.trim().ifEmpty { null } else null,
             observacao = if (ehBloqueioOuSeparado) observacao.trim().ifEmpty { null } else null,
-            okA = okA && (st == null || st == Status.APROVADO)
+            okA = okA && (st == null || st == Status.APROVADO || st == Status.REPARO)
         )
     }
 
@@ -1958,7 +1958,7 @@ private fun FolhaVeiculo(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
-                if (status == null || status == Status.APROVADO) {
+                if (status == null || status == Status.APROVADO || status == Status.REPARO) {
                     Spacer(Modifier.height(10.dp))
                     FilterChip(
                         selected = okA,

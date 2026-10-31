@@ -73,7 +73,7 @@ data class Registro(
     val fotos: List<String> = emptyList(),    // fotos do demérito (Reparo, Bloqueado ou Separado)
     val motivo: String? = null,               // motivo (só Bloqueado/Separado)
     val observacao: String? = null,           // observação (só Bloqueado/Separado)
-    val okA: Boolean = false                  // etiqueta "OK A-" (só Inspeção 360 ou Aprovado)
+    val okA: Boolean = false                  // etiqueta "OK A-" (Inspeção 360, Aprovado ou Reparo)
 ) {
     /** Só entra na Produção quem é Aprovado ou Reparo (Inspeção, Bloqueado e Separado não contam). */
     val contabiliza: Boolean get() = status == Status.APROVADO || status == Status.REPARO

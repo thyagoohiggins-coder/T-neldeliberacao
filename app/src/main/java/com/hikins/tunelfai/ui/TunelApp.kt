@@ -1670,8 +1670,45 @@ private fun FolhaVeiculo(
         }
         fotoPendente = null
     }
+    // Inspeção 360: só 1 foto (capa da checklist). Reparo/Bloqueado/Separado: até MAX_FOTOS.
+    val limiteFotos = if (status == null) 1 else MAX_FOTOS
     val escolherFotos = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
-        uris.take(MAX_FOTOS - fotos.size).forEach { u -> Fotos.copiarDaGaleria(context, u)?.let { fotos.add(it) } }
+        uris.take((limiteFotos - fotos.size).coerceAtLeast(0))
+            .forEach { u -> Fotos.copiarDaGaleria(context, u)?.let { fotos.add(it) } }
+    }
+
+    /** Miniaturas + botões de câmera/galeria até [limite] fotos. */
+    @Composable
+    fun GradeFotos(titulo: String, limite: Int) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(titulo, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.width(6.dp))
+            Text(if (limite == 1) "opcional" else "opcional • até $limite", color = Cores.TextoSuave,
+                style = MaterialTheme.typography.labelSmall)
+        }
+        Spacer(Modifier.height(8.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            fotos.toList().forEach { caminho ->
+                MiniaturaFoto(caminho, onRemover = {
+                    fotos.remove(caminho)
+                    // Foto nova desta tela: já apaga o arquivo; as originais só ao salvar.
+                    if (caminho !in fotosOriginais) Fotos.apagar(listOf(caminho))
+                })
+            }
+            if (fotos.size < limite) {
+                BotaoFoto(Icons.Filled.PhotoCamera, "Câmera") {
+                    val f = Fotos.novoArquivo(context)
+                    fotoPendente = f
+                    tirarFoto.launch(Fotos.uriDe(context, f))
+                }
+                BotaoFoto(Icons.Filled.AddPhotoAlternate, "Galeria") {
+                    escolherFotos.launch("image/*")
+                }
+            }
+        }
     }
 
     /** O que está preenchido agora (null se o formulário de novo veículo estiver vazio). */
@@ -1738,7 +1775,8 @@ private fun FolhaVeiculo(
             ordem = inicial?.ordem ?: 0,
             // Fotos e responsável ficam salvos mesmo se o reparo ainda não foi escrito.
             responsavel = responsavel.trim().ifEmpty { null },
-            fotos = fotos.toList(),
+            // Aprovado (liberado) não guarda fotos; nos outros status elas ficam.
+            fotos = if (st == Status.APROVADO) emptyList() else fotos.toList(),
             motivo = if (ehBloqueioOuSeparado) motivo.trim().ifEmpty { null } else null,
             observacao = if (ehBloqueioOuSeparado) observacao.trim().ifEmpty { null } else null
         )
@@ -1905,6 +1943,15 @@ private fun FolhaVeiculo(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
+                if (status == null) {
+                    Spacer(Modifier.height(12.dp))
+                    GradeFotos("Foto da capa da checklist", 1)
+                }
+                if (status == Status.APROVADO && fotos.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text("Veículo aprovado: as fotos serão descartadas ao salvar.",
+                        color = Cores.TextoSuave, style = MaterialTheme.typography.bodySmall)
+                }
                 if (status in STATUS_COM_ENVIO) {
                     Spacer(Modifier.height(12.dp))
                     OutlinedTextField(
@@ -1930,36 +1977,7 @@ private fun FolhaVeiculo(
                     }
 
                     Spacer(Modifier.height(14.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Fotos do demérito", fontWeight = FontWeight.SemiBold,
-                            style = MaterialTheme.typography.titleSmall)
-                        Spacer(Modifier.width(6.dp))
-                        Text("opcional • até $MAX_FOTOS", color = Cores.TextoSuave,
-                            style = MaterialTheme.typography.labelSmall)
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        fotos.toList().forEach { caminho ->
-                            MiniaturaFoto(caminho, onRemover = {
-                                fotos.remove(caminho)
-                                // Foto nova desta tela: já apaga o arquivo; as originais só ao salvar.
-                                if (caminho !in fotosOriginais) Fotos.apagar(listOf(caminho))
-                            })
-                        }
-                        if (fotos.size < MAX_FOTOS) {
-                            BotaoFoto(Icons.Filled.PhotoCamera, "Câmera") {
-                                val f = Fotos.novoArquivo(context)
-                                fotoPendente = f
-                                tirarFoto.launch(Fotos.uriDe(context, f))
-                            }
-                            BotaoFoto(Icons.Filled.AddPhotoAlternate, "Galeria") {
-                                escolherFotos.launch("image/*")
-                            }
-                        }
-                    }
+                    GradeFotos("Fotos do demérito", limiteFotos)
 
                     Spacer(Modifier.height(14.dp))
                     Button(

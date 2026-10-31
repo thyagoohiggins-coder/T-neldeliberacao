@@ -1488,11 +1488,11 @@ private fun LinhaVeiculo(
                 }
                 if (r.okA && (r.status == null || r.status == Status.APROVADO)) {
                     Text(
-                        "OK A-", color = Cores.Verde, fontWeight = FontWeight.Bold, fontSize = 11.sp,
+                        "OK A-", color = Cores.Ambar, fontWeight = FontWeight.Bold, fontSize = 11.sp,
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
-                            .background(Cores.Verde.copy(alpha = 0.18f))
-                            .border(1.dp, Cores.Verde.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
+                            .background(Cores.Ambar.copy(alpha = 0.18f))
+                            .border(1.dp, Cores.Ambar.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
                             .padding(horizontal = 6.dp, vertical = 1.dp)
                     )
                     Spacer(Modifier.width(6.dp))
@@ -1971,13 +1971,13 @@ private fun FolhaVeiculo(
                         colors = FilterChipDefaults.filterChipColors(
                             containerColor = Cores.SuperficieAlta,
                             labelColor = Cores.TextoSuave,
-                            selectedContainerColor = Cores.Verde.copy(alpha = 0.2f),
-                            selectedLabelColor = Cores.Verde,
-                            selectedLeadingIconColor = Cores.Verde
+                            selectedContainerColor = Cores.Ambar.copy(alpha = 0.2f),
+                            selectedLabelColor = Cores.Ambar,
+                            selectedLeadingIconColor = Cores.Ambar
                         ),
                         border = FilterChipDefaults.filterChipBorder(
                             enabled = true, selected = okA,
-                            borderColor = Cores.Borda, selectedBorderColor = Cores.Verde
+                            borderColor = Cores.Borda, selectedBorderColor = Cores.Ambar
                         )
                     )
                 }

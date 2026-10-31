@@ -173,6 +173,9 @@ private fun corStatus(status: Status?): Color = when (status) {
     Status.SEPARADO -> Cores.Cinza
 }
 
+/** Chave para comparar VINs (chassi completo e "VB..." curto batem entre si). */
+private fun chaveVin(vin: String): String = vinCurto(vin.trim().uppercase())
+
 /** "95PEFL31DVB006944" -> "VB006944"; VINs curtos (já "VB...") ficam como estão. */
 private fun vinCurto(vin: String): String {
     val i = vin.lastIndexOf(PREFIXO_VIN)
@@ -516,6 +519,7 @@ fun TunelApp() {
             bancoReparos = bancoReparos,
             rascunho = rascunho,
             onRascunho = { rascunho = it },
+            vinsExistentes = registros.associate { chaveVin(it.vin) to it.intervalo },
             onFechar = { novoAberto = false },
             onSalvar = { r ->
                 rascunho = null
@@ -534,6 +538,8 @@ fun TunelApp() {
             inicial = atual,
             adiantar = adiantar,
             bancoReparos = bancoReparos,
+            vinsExistentes = registros.filter { it.ordem != atual.ordem }
+                .associate { chaveVin(it.vin) to it.intervalo },
             onFechar = { editando = null },
             onSalvar = { novo ->
                 val i = registros.indexOfFirst { it.ordem == atual.ordem }
@@ -989,6 +995,27 @@ fun TunelApp() {
         )
     }
 
+    AvisosUi.semReparo?.let { r ->
+        AlertDialog(
+            onDismissRequest = { AvisosUi.semReparo = null },
+            containerColor = Cores.Superficie,
+            title = { Text("Veículo salvo sem reparo") },
+            text = {
+                Text("${r.vin} foi salvo com as fotos, mas sem o reparo (NC) escrito. " +
+                    "Ele fica como Inspeção 360 e não conta na produção até você escrever o reparo.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    AvisosUi.semReparo = null
+                    enviarWhatsAppComFotos(context, Formatador.negado(r.copy(reparo = "")), r.fotos)
+                }) { Text("Enviar mesmo assim") }
+            },
+            dismissButton = {
+                TextButton(onClick = { AvisosUi.semReparo = null }) { Text("OK") }
+            }
+        )
+    }
+
     if (mostrarAvisoFechamento) {
         AlertDialog(
             onDismissRequest = { mostrarAvisoFechamento = false },
@@ -1158,6 +1185,11 @@ private fun Pilula(texto: String, cor: Color) {
             .background(cor.copy(alpha = 0.16f))
             .padding(horizontal = 10.dp, vertical = 4.dp)
     )
+}
+
+/** Avisos que precisam sobreviver ao fechamento da folha de cadastro. */
+object AvisosUi {
+    var semReparo by mutableStateOf<Registro?>(null)
 }
 
 /** Preferências de exibição lidas em vários pontos da tela (estado observável do Compose). */
@@ -1574,7 +1606,8 @@ private fun FolhaVeiculo(
     onSalvar: (Registro) -> Unit,
     onExcluir: (() -> Unit)? = null,
     rascunho: Rascunho? = null,
-    onRascunho: (Rascunho?) -> Unit = {}
+    onRascunho: (Rascunho?) -> Unit = {},
+    vinsExistentes: Map<String, String> = emptyMap()
 ) {
     val context = LocalContext.current
     // Novo veículo fechado sem salvar: os campos voltam do rascunho.
@@ -1594,6 +1627,11 @@ private fun FolhaVeiculo(
     var intervalo by remember { mutableStateOf(inicial?.intervalo ?: r0?.intervalo ?: AUTOMATICO) }
     var confirmarExcluir by remember { mutableStateOf(false) }
     var abrirScanner by remember { mutableStateOf(false) }
+    // Intervalo onde este VIN já existe (null se não é repetido). Atualiza enquanto digita.
+    val vinRepetidoEm: String? = run {
+        val completo = if (usarPrefixo) PREFIXO_VIN + vin else vin
+        if (vin.isBlank()) null else vinsExistentes[chaveVin(completo)]
+    }
     var menuReparo by remember { mutableStateOf(false) }
     val autoModelo = remember { Configuracoes(context).autoModelo }
 
@@ -1698,8 +1736,9 @@ private fun FolhaVeiculo(
             reparo = if (ehReparo) rep else null,
             intervalo = if (intervalo == AUTOMATICO) intervaloAgora() else intervalo,
             ordem = inicial?.ordem ?: 0,
-            responsavel = if (comEnvio) responsavel.trim().ifEmpty { null } else null,
-            fotos = if (comEnvio) fotos.toList() else emptyList(),
+            // Fotos e responsável ficam salvos mesmo se o reparo ainda não foi escrito.
+            responsavel = responsavel.trim().ifEmpty { null },
+            fotos = fotos.toList(),
             motivo = if (ehBloqueioOuSeparado) motivo.trim().ifEmpty { null } else null,
             observacao = if (ehBloqueioOuSeparado) observacao.trim().ifEmpty { null } else null
         )
@@ -1742,6 +1781,13 @@ private fun FolhaVeiculo(
                     detectarModelo()
                 },
                 label = { Text("VIN") },
+                isError = vinRepetidoEm != null,
+                supportingText = vinRepetidoEm?.let { intv ->
+                    {
+                        Text("⚠ VIN repetido: já está na lista no intervalo ${faixaCurta(intv)}.",
+                            color = Cores.Vermelho, fontWeight = FontWeight.SemiBold)
+                    }
+                },
                 prefix = if (usarPrefixo) {
                     { Text(PREFIXO_VIN, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold,
                         color = Cores.Azul) }
@@ -1921,9 +1967,12 @@ private fun FolhaVeiculo(
                             val r = montar()
                             when {
                                 r == null -> Toast.makeText(context, "Digite o VIN.", Toast.LENGTH_SHORT).show()
-                                r.status !in STATUS_COM_ENVIO ->
-                                    Toast.makeText(context, "Escreva o reparo (NC) antes de enviar.",
-                                        Toast.LENGTH_SHORT).show()
+                                r.status !in STATUS_COM_ENVIO -> {
+                                    // Reparo sem descrição: salva assim mesmo (fica como Inspeção 360) e avisa.
+                                    Fotos.apagar((fotosOriginais + fotos).distinct().filter { it !in r.fotos })
+                                    onSalvar(r)
+                                    AvisosUi.semReparo = r
+                                }
                                 else -> {
                                     // Enviar também salva o veículo na lista (novo ou edição).
                                     Fotos.apagar((fotosOriginais + fotos).distinct().filter { it !in r.fotos })

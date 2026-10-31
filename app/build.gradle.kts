@@ -26,9 +26,10 @@ android {
         vectorDrawables { useSupportLibrary = true }
     }
 
-    // Assinatura de release via variáveis de ambiente (GitHub Secrets).
-    // Se a keystore não existir (build local/debug), o bloco é ignorado.
+    // Assinatura de release: usa a keystore dos GitHub Secrets se existir; senão, a chave fixa
+    // versionada em app/assinatura. Assim todo APK sai com a MESMA assinatura e instala por cima.
     val keystoreFile = rootProject.file("release.keystore")
+    val keystoreFixa = file("assinatura/tunelfai.jks")
     signingConfigs {
         create("release") {
             if (keystoreFile.exists()) {
@@ -36,6 +37,11 @@ android {
                 storePassword = System.getenv("KEYSTORE_PASSWORD") ?: ""
                 keyAlias = System.getenv("KEY_ALIAS") ?: ""
                 keyPassword = System.getenv("KEY_PASSWORD") ?: ""
+            } else {
+                storeFile = keystoreFixa
+                storePassword = "tunelfai2026"
+                keyAlias = "tunelfai"
+                keyPassword = "tunelfai2026"
             }
         }
     }
@@ -47,11 +53,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = if (keystoreFile.exists()) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
-            }
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
@@ -84,4 +86,9 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    // Leitor de código de barras do chassi com área de leitura (CameraX + ML Kit)
+    implementation("androidx.camera:camera-camera2:1.3.4")
+    implementation("androidx.camera:camera-lifecycle:1.3.4")
+    implementation("androidx.camera:camera-view:1.3.4")
+    implementation("com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1")
 }

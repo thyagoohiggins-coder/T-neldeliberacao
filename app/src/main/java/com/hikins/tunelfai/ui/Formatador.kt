@@ -1,62 +1,110 @@
 package com.hikins.tunelfai.ui
 
-import com.hikins.tunelfai.data.MetaInput
 import com.hikins.tunelfai.model.Intervalos
 import com.hikins.tunelfai.model.Registro
 import com.hikins.tunelfai.model.Status
 
-/** Geração das mensagens de WhatsApp (texto puro, sem emojis). */
+/** Estatística de um intervalo (ou do total). Produção/Aprovado null = ainda sem veículos. */
+data class Estatistica(val meta: Int, val prod: Int?, val aprov: Int?) {
+    val dif: Int? get() = aprov?.let { it - meta }   // Aprovado - Meta: negativo = faltam aprovados
+}
+
+/** Geração das mensagens de WhatsApp no formato do "FECHAMENTO TÚNEL". */
 object Formatador {
 
-    private fun paraInt(s: String): Int = s.trim().toIntOrNull() ?: 0
+    private const val CABECALHO = "_FECHAMENTO TÚNEL_"
 
-    /**
-     * Mensagem de um intervalo: lista numerada dos veículos na ordem de adição.
-     * Liberado sai sem "Motivo". Se [incluirMeta], acrescenta a linha de estatística.
-     */
-    fun intervalo(
-        intervalo: String,
-        registros: List<Registro>,
-        incluirMeta: Boolean,
-        meta: MetaInput
-    ): String {
-        val sb = StringBuilder()
-        registros.forEachIndexed { i, r ->
-            sb.append(i + 1).append(". ")
-            sb.append("VIN: ").append(r.vin)
-            sb.append(" Status: ").append(r.status.texto)
-            if (r.status == Status.NEGADO && r.motivo != null) {
-                sb.append(" Motivo: ").append(r.motivo.texto)
-            }
-            sb.append(" Intervalo: ").append(intervalo)
-            sb.append('\n')
-        }
-        if (incluirMeta) {
-            val meta_ = Intervalos.metaDe(intervalo)
-            val prod = paraInt(meta.prod)
-            val aprov = paraInt(meta.aprov)
-            sb.append("Intervalo: ").append(intervalo)
-                .append(" Meta: ").append(meta_)
-                .append(" Prod: ").append(prod)
-                .append(" Aprov: ").append(aprov)
-                .append(" Dif: ").append(prod - meta_)   // Produção - Meta: negativo se não bateu a meta
-        }
-        return sb.toString().trimEnd('\n')
+    /** Fim do turno: o último intervalo vai das 15:00 às 15:48. */
+    private const val FIM_ULTIMO = "15:48"
+
+    /** "06:00" -> "06:00 ÀS 07:00"; "15:00" -> "15:00 ÀS 15:48". */
+    fun faixa(intervalo: String): String {
+        val hora = intervalo.substringBefore(':').toIntOrNull() ?: return intervalo
+        if (intervalo == Intervalos.lista.last()) return "$intervalo ÀS $FIM_ULTIMO"
+        return "%s ÀS %02d:00".format(intervalo, hora + 1)
     }
 
     /**
-     * Resumo total de todos os intervalos.
-     * TTL é fixo (80). Prod = total de VINs registrados; Aprov = VINs Liberados.
-     * Dif = saldo acumulado: soma de (Produção digitada - Meta) de cada intervalo
-     * presente no app. Pode terminar positivo ou negativo.
+     * Produção = veículos com status (Aprovado ou Reparo); Aprovado = só os aprovados.
+     * Veículo sem status (Fazendo Inspeção 360) não conta. Intervalo sem veículos sai em branco.
      */
-    fun total(todos: List<Registro>, metas: Map<String, MetaInput>): String {
-        val prod = todos.size
-        val aprov = todos.count { it.status == Status.LIBERADO }
-        val difAcumulada = todos.map { it.intervalo }.distinct().sumOf { intv ->
-            val prodDigitado = paraInt(metas[intv]?.prod ?: "")
-            prodDigitado - Intervalos.metaDe(intv)
-        }
-        return "TTL: ${Intervalos.META_TOTAL} Prod: $prod Aprov: $aprov Dif: $difAcumulada"
+    fun estatistica(intervalo: String, registros: List<Registro>): Estatistica {
+        val doIntervalo = registros.filter { it.intervalo == intervalo }
+        val meta = Intervalos.metaDe(intervalo)
+        if (doIntervalo.isEmpty()) return Estatistica(meta, null, null)
+        return Estatistica(
+            meta,
+            doIntervalo.count { it.contabiliza },
+            doIntervalo.count { it.status == Status.APROVADO }
+        )
+    }
+
+    /** TOTAL: Meta = soma das metas dos intervalos, soma dos intervalos e Diferença = Aprovado - Meta. */
+    fun estatisticaTotal(registros: List<Registro>): Estatistica {
+        val porIntervalo = Intervalos.lista.map { estatistica(it, registros) }
+        val algum = porIntervalo.any { it.prod != null }
+        return Estatistica(
+            Intervalos.metaTotal,
+            if (algum) porIntervalo.sumOf { it.prod ?: 0 } else null,
+            if (algum) porIntervalo.sumOf { it.aprov ?: 0 } else null
+        )
+    }
+
+    private fun bloco(titulo: String, e: Estatistica): String =
+        "*$titulo:*\n" +
+            "*META:* ${e.meta}\n" +
+            "*PRODUÇÃO:* ${e.prod ?: ""}\n" +
+            "*APROVADO:* ${e.aprov ?: ""}\n" +
+            "*DIFERENÇA:* ${e.dif ?: ""}"
+
+    /** Mensagem de veículo negado (Reparo), enviada junto com as fotos do demérito. */
+    fun negado(r: Registro): String =
+        "*Veículo negado túnel*\n\n" +
+            "*Vin:* *${r.vin}*\n" +
+            "*Modelo:* *${r.modelo.orEmpty()}*\n" +
+            "*NC:* *${r.reparo.orEmpty()}*\n" +
+            "*Responsável:* *${r.responsavel.orEmpty()}*"
+
+    /**
+     * Veículo Bloqueado/Separado: Modelo e Responsável sempre; Motivo e Observação só se preenchidos.
+     */
+    private fun bloqueioOuSeparacao(titulo: String, r: Registro): String {
+        // Só negrito (sem itálico) e dois espaços depois dos dois pontos.
+        val linhas = mutableListOf(
+            "*$titulo*",
+            "",
+            "*Vin:*  ${r.vin}",
+            "*Modelo:*  ${r.modelo.orEmpty()}",
+            "*Responsável:*  ${r.responsavel.orEmpty()}"
+        )
+        r.motivo?.takeIf { it.isNotBlank() }?.let { linhas += "*Motivo:*  $it" }
+        r.observacao?.takeIf { it.isNotBlank() }?.let { linhas += "*Observação:*  $it" }
+        return linhas.joinToString("\n")
+    }
+
+    fun bloqueado(r: Registro): String = bloqueioOuSeparacao("Veiculo Bloqueado", r)
+
+    fun separado(r: Registro): String = bloqueioOuSeparacao("Veiculo Separado", r)
+
+    /** Mensagem individual do veículo conforme o status (null se o status não tem envio). */
+    fun mensagemDe(r: Registro): String? = when (r.status) {
+        Status.REPARO -> negado(r)
+        Status.BLOQUEADO -> bloqueado(r)
+        Status.SEPARADO -> separado(r)
+        else -> null
+    }
+
+    /** Título da mensagem de um intervalo específico (negrito + itálico). */
+    private const val CABECALHO_INTERVALO = "*_H/H LIBERAÇÃO TUNEL_*"
+
+    /** Mensagem de um único intervalo (o TOTAL vai só no fechamento do dia). */
+    fun intervalo(intervalo: String, registros: List<Registro>): String =
+        CABECALHO_INTERVALO + "\n\n" + bloco(faixa(intervalo), estatistica(intervalo, registros))
+
+    /** Fechamento completo: todos os intervalos (06:00 a 15:00) e o TOTAL. */
+    fun total(registros: List<Registro>): String {
+        val blocos = Intervalos.lista.map { bloco(faixa(it), estatistica(it, registros)) }
+        val total = bloco("TOTAL", estatisticaTotal(registros))
+        return CABECALHO + "\n\n" + (blocos + total).joinToString("\n\n")
     }
 }

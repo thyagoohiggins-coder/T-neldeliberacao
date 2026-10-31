@@ -47,6 +47,8 @@ jobs:
 
       - name: Configurar Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
 
       - name: Restaurar keystore dos Secrets
         env:
@@ -56,7 +58,7 @@ jobs:
             echo "$KEYSTORE_BASE64" | base64 -d > release.keystore
             echo "Keystore restaurada — APK sairá assinado de release."
           else
-            echo "AVISO: Secret KEYSTORE_BASE64 ausente — o APK sairá assinado em debug."
+            echo "Secret KEYSTORE_BASE64 ausente — usando a chave fixa app/assinatura/tunelfai.jks."
           fi
 
       - name: Build do APK de release

@@ -68,6 +68,26 @@ class Configuracoes(context: Context) {
         get() = prefs.getString("aviso_intervalo_ultimo", "") ?: ""
         set(v) = prefs.edit().putString("aviso_intervalo_ultimo", v).apply()
 
+    /** Quantos minutos antes do fim de cada intervalo o aviso do H/H aparece. */
+    var avisoIntervaloMinutos: Int
+        get() = prefs.getInt("aviso_intervalo_minutos", 15)
+        set(v) = prefs.edit().putInt("aviso_intervalo_minutos", v).apply()
+
+    /** Mensagens de aprovados com modelo e cor. */
+    var detalhado: Boolean
+        get() = prefs.getBoolean("detalhado", false)
+        set(v) = prefs.edit().putBoolean("detalhado", v).apply()
+
+    /** Ao começar um intervalo, move os carros ainda em Inspeção 360 de intervalos anteriores para ele. */
+    var moverInspecao: Boolean
+        get() = prefs.getBoolean("mover_inspecao", false)
+        set(v) = prefs.edit().putBoolean("mover_inspecao", v).apply()
+
+    /** Último intervalo em que a mudança automática da Inspeção 360 rodou ("yyyy-MM-dd 07:00"). */
+    var moverInspecaoUltimo: String
+        get() = prefs.getString("mover_inspecao_ultimo", "") ?: ""
+        set(v) = prefs.edit().putString("mover_inspecao_ultimo", v).apply()
+
     /** Dia (yyyy-MM-dd) em que o aviso de fechamento já foi mostrado. */
     var avisoFechamentoDia: String
         get() = prefs.getString("aviso_fechamento_dia", "") ?: ""

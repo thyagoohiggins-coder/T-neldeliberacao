@@ -2,6 +2,7 @@ package com.hikins.tunelfai.data
 
 import android.content.Context
 import com.hikins.tunelfai.model.Catalogo
+import com.hikins.tunelfai.model.Etiqueta
 import com.hikins.tunelfai.model.Registro
 import com.hikins.tunelfai.model.Status
 import org.json.JSONArray
@@ -21,6 +22,18 @@ class Repositorio(context: Context) {
 
     private fun JSONObject.textoOuNull(chave: String): String? =
         optString(chave, "").takeIf { it.isNotBlank() }
+
+    /** Etiquetas salvas (e o antigo campo "okA" das versões anteriores). */
+    private fun lerEtiquetas(o: JSONObject): List<Etiqueta> {
+        val lista = mutableListOf<Etiqueta>()
+        o.optJSONArray("etiquetas")?.let { arr ->
+            for (i in 0 until arr.length()) {
+                Etiqueta.entries.firstOrNull { it.name == arr.optString(i) }?.let { lista += it }
+            }
+        }
+        if (o.optBoolean("okA", false) && Etiqueta.OK_A !in lista) lista += Etiqueta.OK_A
+        return lista
+    }
 
     fun carregar(): EstadoTunel {
         if (!arquivo.exists()) return EstadoTunel()
@@ -59,7 +72,7 @@ class Repositorio(context: Context) {
                     // "motivo" é usado pelos dados antigos (Negado); o texto livre fica em "motivoTexto".
                     motivo = o.textoOuNull("motivoTexto"),
                     observacao = o.textoOuNull("observacao"),
-                    okA = o.optBoolean("okA", false)
+                    etiquetas = lerEtiquetas(o)
                 )
             }
 
@@ -87,7 +100,7 @@ class Repositorio(context: Context) {
                     .put("fotos", JSONArray(r.fotos))
                     .put("motivoTexto", r.motivo ?: "")
                     .put("observacao", r.observacao ?: "")
-                    .put("okA", r.okA)
+                    .put("etiquetas", JSONArray(r.etiquetas.map { it.name }))
             )
         }
         raiz.put("registros", arr)

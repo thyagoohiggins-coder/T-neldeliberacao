@@ -63,7 +63,14 @@ object Formatador {
             "*Vin:* *${r.vin}*\n" +
             "*Modelo:* *${r.modelo.orEmpty()}*\n" +
             "*NC:* *${r.reparo.orEmpty()}*\n" +
-            "*Responsável:* *${r.responsavel.orEmpty()}*"
+            "*Responsável:* *${r.responsavel.orEmpty()}*" +
+            obsAutomatica(r)
+
+    /** Etiquetas (OK A-, Retorno/Prioridade PDI) viram uma linha "Obs" automática no Reparo. */
+    private fun obsAutomatica(r: Registro): String {
+        val obs = r.etiquetasVisiveis.filter { it.obsReparo }.joinToString(", ") { it.texto }
+        return if (obs.isEmpty()) "" else "\n*Obs:* *$obs*"
+    }
 
     /**
      * Veículo Bloqueado/Separado: Modelo e Responsável sempre; Motivo e Observação só se preenchidos.
@@ -100,6 +107,63 @@ object Formatador {
     /** Mensagem de um único intervalo (o TOTAL vai só no fechamento do dia). */
     fun intervalo(intervalo: String, registros: List<Registro>): String =
         CABECALHO_INTERVALO + "\n\n" + bloco(faixa(intervalo), estatistica(intervalo, registros))
+
+    private const val TITULO_APROVADOS = "*VEÍCULOS DE TÚNEL DE LIBERAÇÃO*"
+
+    private fun dataDeHoje(): String =
+        java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale("pt", "BR")).format(java.util.Date())
+
+    /** "06:00" -> "06 as 07:00"; último intervalo "15 as 15:48". */
+    private fun faixaAprovados(intervalo: String): String =
+        faixa(intervalo).replace(":00 ÀS ", " as ")
+
+    private fun aprovadosDe(intervalo: String, registros: List<Registro>): List<Registro> =
+        registros.filter { it.intervalo == intervalo && it.status == Status.APROVADO }.sortedBy { it.ordem }
+
+    /** Um veículo aprovado: VIN, etiquetas, (modelo/cor se detalhado) e status. */
+    private fun itemAprovado(n: Int, r: Registro, detalhado: Boolean): String {
+        val sb = StringBuilder("$n. *_${r.vin}_*")
+        val tags = r.etiquetasVisiveis.joinToString(", ") { it.texto }
+        if (tags.isNotEmpty()) sb.append(" (_").append(tags).append(")_")
+        if (detalhado) {
+            r.modelo?.let { sb.append("\n*_Modelo_*: ").append(it) }
+            r.cor?.let { sb.append("\n_*Cor*_: ").append(it) }
+        }
+        sb.append("\n _*Status*_: _Aprovado_")
+        return sb.toString()
+    }
+
+    private fun itens(aprovados: List<Registro>, detalhado: Boolean): String =
+        aprovados.mapIndexed { i, r -> itemAprovado(i + 1, r, detalhado) }.joinToString("\n\n")
+
+    /** Só os aprovados de um intervalo. */
+    fun aprovadosIntervalo(
+        intervalo: String, registros: List<Registro>, detalhado: Boolean, data: String = dataDeHoje()
+    ): String {
+        val aprovados = aprovadosDe(intervalo, registros)
+        val hora = intervalo.substringBefore(':')
+        return "$TITULO_APROVADOS\n\n" +
+            "*DATA*: ```$data```\n\n" +
+            "*INTERVALO*: ```${hora}h:00```\n\n" +
+            (if (aprovados.isEmpty()) "" else itens(aprovados, detalhado) + "\n\n") +
+            "*TOTAL DE APROVADOS*: ${aprovados.size}"
+    }
+
+    /** Aprovados de todos os intervalos (só os intervalos que têm aprovados). */
+    fun aprovadosTodos(registros: List<Registro>, detalhado: Boolean, data: String = dataDeHoje()): String {
+        val grupos = Intervalos.lista
+            .map { it to aprovadosDe(it, registros) }
+            .filter { it.second.isNotEmpty() }
+        val total = grupos.sumOf { it.second.size }
+        val corpo = grupos.joinToString("\n\n") { (intv, lista) ->
+            "*Intervalo: ${faixaAprovados(intv)}* ⬇️\n\n" + itens(lista, detalhado)
+        }
+        return "$TITULO_APROVADOS\n\n" +
+            "*DATA*: ```$data```\n\n" +
+            "*INTERVALO*:  *Todos* (1° Turno)\n\n" +
+            (if (corpo.isEmpty()) "" else corpo + "\n\n\n") +
+            "*TOTAL DE APROVADOS*: $total"
+    }
 
     /** Fechamento completo: todos os intervalos (06:00 a 15:00) e o TOTAL. */
     fun total(registros: List<Registro>): String {

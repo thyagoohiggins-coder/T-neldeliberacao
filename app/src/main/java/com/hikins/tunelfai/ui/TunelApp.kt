@@ -124,6 +124,7 @@ import com.hikins.tunelfai.lembrete.Lembretes
 import com.hikins.tunelfai.R
 import com.hikins.tunelfai.model.Catalogo
 import com.hikins.tunelfai.model.Marca
+import com.hikins.tunelfai.model.Etiqueta
 import androidx.compose.ui.res.painterResource
 import com.hikins.tunelfai.model.Intervalos
 import com.hikins.tunelfai.model.Registro
@@ -149,7 +150,7 @@ private data class Rascunho(
     val intervalo: String,
     val motivo: String = "",
     val observacao: String = "",
-    val okA: Boolean = false
+    val etiquetas: List<Etiqueta> = emptyList()
 )
 private const val PREFIXO_VIN = "VB"
 private const val MAX_FOTOS = 4
@@ -229,12 +230,17 @@ fun TunelApp() {
     var mostrarDialogoUpdate by remember { mutableStateOf(false) }
     var erroAtualizacao by remember { mutableStateOf<String?>(null) }
 
-    var adiantar by remember { mutableStateOf(config.adiantarIntervalo) }
+    val adiantar = false   // opção "Adiantar intervalo" removida
     var lembretes by remember { mutableStateOf(config.lembretes) }
     var autoModeloCfg by remember { mutableStateOf(config.autoModelo) }
     var avisoFechamentoCfg by remember { mutableStateOf(config.avisoFechamento) }
     var mostrarAvisoFechamento by remember { mutableStateOf(false) }
     var avisoIntervaloCfg by remember { mutableStateOf(config.avisoIntervalo) }
+    var avisoMinutos by remember { mutableStateOf(config.avisoIntervaloMinutos) }
+    var detalhado by remember { mutableStateOf(config.detalhado) }
+    var moverInspecaoCfg by remember { mutableStateOf(config.moverInspecao) }
+    var carregado by remember { mutableStateOf(false) }
+    var envioIntervalo by remember { mutableStateOf<String?>(null) }
     var avisoIntervalo by remember { mutableStateOf<String?>(null) }
     remember { PreferenciasUi.mostrarLogos = config.mostrarLogos }
     var metasEditadas by remember {
@@ -277,6 +283,9 @@ fun TunelApp() {
         val e = repo.carregar()
         registros.addAll(e.registros)
         seq = e.seq
+        carregado = true
+        // Notificações de lembrete foram removidas: desliga e cancela as agendadas.
+        if (config.lembretes) { config.lembretes = false; lembretes = false }
         Lembretes.atualizar(context)
         // Checagem silenciosa de atualização ao abrir.
         val r = Atualizador.verificar(context)
@@ -507,7 +516,7 @@ fun TunelApp() {
                         if (selecionados.containsAll(ids)) selecionados.removeAll(ids)
                         else selecionados.addAll(ids.filterNot { it in selecionados })
                     },
-                    onEnviar = { enviarWhatsApp(context, Formatador.intervalo(intervalo, registros)) }
+                    onEnviar = { envioIntervalo = intervalo }
                 )
             }
         }
@@ -640,13 +649,6 @@ fun TunelApp() {
             ) {
                 Text("Configurações", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 LinhaSwitch(
-                    titulo = "Adiantar intervalo",
-                    descricao = "Faltando ${Intervalos.MINUTOS_ADIANTAR} min ou menos para o próximo " +
-                        "intervalo, o carro já entra no intervalo seguinte.",
-                    marcado = adiantar,
-                    onMudar = { adiantar = it; config.adiantarIntervalo = it }
-                )
-                LinhaSwitch(
                     titulo = "Modelo automático pelo VIN",
                     descricao = "Ao digitar ou ler o chassi, o modelo é escolhido pelo prefixo " +
                         "(ex.: 95PLDL61DVB → Uni-T).",
@@ -662,8 +664,8 @@ fun TunelApp() {
                 )
                 LinhaSwitch(
                     titulo = "Aviso do H/H de cada intervalo",
-                    descricao = "No fim de cada intervalo (06:45 até 14:45), ao abrir ou usar o app, " +
-                        "aparece no meio da tela o lembrete para enviar o H/H daquele intervalo.",
+                    descricao = "Faltando $avisoMinutos min para acabar cada intervalo (06:00 até 15:00), ao " +
+                        "abrir ou usar o app, aparece no meio da tela o lembrete para enviar o H/H daquele intervalo.",
                     marcado = avisoIntervaloCfg,
                     onMudar = { avisoIntervaloCfg = it; config.avisoIntervalo = it }
                 )
@@ -675,21 +677,20 @@ fun TunelApp() {
                     onMudar = { avisoFechamentoCfg = it; config.avisoFechamento = it }
                 )
                 LinhaSwitch(
-                    titulo = "Lembrete do H/H do túnel de liberação",
-                    descricao = "Notifica 15 min antes de cada intervalo (06:45 até 14:45) " +
-                        "e às 15:35 no intervalo das 15:00.",
-                    marcado = lembretes,
-                    onMudar = {
-                        lembretes = it; config.lembretes = it
-                        if (it && Build.VERSION.SDK_INT >= 33) {
-                            pedirNotificacao.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                        } else {
-                            Lembretes.atualizar(context)
-                        }
-                    }
+                    titulo = "Informações detalhadas de H/H e Fechamento",
+                    descricao = "Inclui modelo e cor de cada veículo nas mensagens de aprovados.",
+                    marcado = detalhado,
+                    onMudar = { detalhado = it; config.detalhado = it }
+                )
+                LinhaSwitch(
+                    titulo = "Mover Inspeção 360 para o novo intervalo",
+                    descricao = "Quando um intervalo começa, os carros que ainda estão em Inspeção 360 em " +
+                        "intervalos anteriores passam para o intervalo que acabou de começar.",
+                    marcado = moverInspecaoCfg,
+                    onMudar = { moverInspecaoCfg = it; config.moverInspecao = it }
                 )
 
-                if (lembretes) {
+                if (avisoIntervaloCfg) {
                     Column(
                         Modifier
                             .fillMaxWidth()
@@ -698,10 +699,20 @@ fun TunelApp() {
                             .padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
+                        Text("Aviso do H/H: minutos antes do fim do intervalo", fontWeight = FontWeight.SemiBold)
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf(5, 10, 15, 20, 30).forEach { m ->
+                                Chip(texto = "$m min", selecionado = avisoMinutos == m,
+                                    onClick = { avisoMinutos = m; config.avisoIntervaloMinutos = m })
+                            }
+                        }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                Text("Vibrar no lembrete", fontWeight = FontWeight.SemiBold)
-                                Text("O celular vibra junto com a notificação.",
+                                Text("Vibrar no aviso", fontWeight = FontWeight.SemiBold)
+                                Text("O celular vibra quando o aviso do H/H ou do fechamento aparece.",
                                     style = MaterialTheme.typography.bodySmall, color = Cores.TextoSuave)
                             }
                             Switch(
@@ -955,20 +966,88 @@ fun TunelApp() {
         if (avisoFechamentoCfg && minutos >= 15 * 60 + 35 && config.avisoFechamentoDia != hojeTexto) {
             config.avisoFechamentoDia = hojeTexto
             mostrarAvisoFechamento = true
+            if (config.vibrar) Lembretes.vibrar(context, config.vibracaoForca, config.vibracaoSegundos)
         }
     }
-    // Aviso de cada intervalo: na janela XX:45 até (XX+1):45, uma vez por intervalo por dia.
-    LaunchedEffect(agora, avisoIntervaloCfg) {
+    // Aviso de cada intervalo: de X min antes do fim do intervalo até X min antes do fim do seguinte,
+    // uma vez por intervalo por dia (X escolhido nas configurações).
+    LaunchedEffect(agora, avisoIntervaloCfg, avisoMinutos) {
         if (!avisoIntervaloCfg) return@LaunchedEffect
         val minutos = agora.get(Calendar.HOUR_OF_DAY) * 60 + agora.get(Calendar.MINUTE)
-        val hora = (6..14).firstOrNull { h -> minutos in (h * 60 + 45) until ((h + 1) * 60 + 45) }
-            ?: return@LaunchedEffect
+        val hora = (6..14).firstOrNull { h ->
+            minutos in ((h + 1) * 60 - avisoMinutos) until ((h + 2) * 60 - avisoMinutos)
+        } ?: return@LaunchedEffect
         val intv = "%02d:00".format(hora)
         val chave = "$hojeTexto $intv"
         if (config.avisoIntervaloUltimo != chave) {
             config.avisoIntervaloUltimo = chave
             avisoIntervalo = intv
+            if (config.vibrar) Lembretes.vibrar(context, config.vibracaoForca, config.vibracaoSegundos)
         }
+    }
+
+    // Novo intervalo começou: leva os carros ainda em Inspeção 360 de intervalos anteriores para ele.
+    LaunchedEffect(agora, moverInspecaoCfg, carregado) {
+        val atual = intervaloEmAndamento(agora) ?: return@LaunchedEffect
+        if (!moverInspecaoCfg || !carregado) return@LaunchedEffect
+        val chave = "$hojeTexto $atual"
+        if (config.moverInspecaoUltimo == chave) return@LaunchedEffect
+        config.moverInspecaoUltimo = chave
+        var movidos = 0
+        for (i in registros.indices) {
+            val r = registros[i]
+            if (r.status == null && r.intervalo < atual) {
+                registros[i] = r.copy(intervalo = atual)
+                movidos++
+            }
+        }
+        if (movidos > 0) {
+            persistir()
+            Toast.makeText(context, "$movidos veículo(s) em Inspeção 360 movido(s) para ${faixaCurta(atual)}.",
+                Toast.LENGTH_LONG).show()
+        }
+    }
+
+    // Opções do "Enviar intervalo".
+    envioIntervalo?.let { intv ->
+        val ultimo = intv == Intervalos.lista.last()
+        AlertDialog(
+            onDismissRequest = { envioIntervalo = null },
+            containerColor = Cores.Superficie,
+            icon = { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, tint = Cores.WhatsApp) },
+            title = { Text("Enviar ${faixaCurta(intv)}", textAlign = TextAlign.Center) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Button(
+                        onClick = {
+                            envioIntervalo = null
+                            enviarWhatsApp(context, Formatador.intervalo(intv, registros))
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Cores.WhatsApp, contentColor = Color.White),
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Enviar Hora a hora (Recomendado)", fontWeight = FontWeight.SemiBold) }
+                    OutlinedButton(
+                        onClick = {
+                            envioIntervalo = null
+                            enviarWhatsApp(context, Formatador.aprovadosIntervalo(intv, registros, detalhado))
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Enviar Aprovados") }
+                    if (ultimo) {
+                        OutlinedButton(
+                            onClick = {
+                                envioIntervalo = null
+                                enviarWhatsApp(context, Formatador.aprovadosTodos(registros, detalhado))
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Enviar todos Intervalos") }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { envioIntervalo = null }) { Text("Cancelar") }
+            }
+        )
     }
     avisoIntervalo?.let { intv ->
         AlertDialog(
@@ -1210,6 +1289,26 @@ private fun LogoMarca(marca: Marca, tamanho: androidx.compose.ui.unit.Dp) {
         modifier = Modifier
             .size(tamanho)
             .clip(RoundedCornerShape(6.dp))
+    )
+}
+
+private fun corEtiqueta(et: Etiqueta): Color = when (et) {
+    Etiqueta.OK_A -> Cores.Ambar
+    Etiqueta.LIB_SISTEMA -> Cores.Verde
+    Etiqueta.RETORNO_PDI -> Cores.Azul
+    Etiqueta.PRIORIDADE_PDI -> Color(0xFFE879F9)
+}
+
+@Composable
+private fun EtiquetaPequena(et: Etiqueta) {
+    val cor = corEtiqueta(et)
+    Text(
+        et.texto, color = cor, fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 1,
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(cor.copy(alpha = 0.18f))
+            .border(1.dp, cor.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
+            .padding(horizontal = 6.dp, vertical = 1.dp)
     )
 }
 
@@ -1486,21 +1585,18 @@ private fun LinhaVeiculo(
                     LogoMarca(marca, 20.dp)
                     Spacer(Modifier.width(6.dp))
                 }
-                if (r.okA && (r.status == null || r.status == Status.APROVADO || r.status == Status.REPARO)) {
-                    Text(
-                        "OK A-", color = Cores.Ambar, fontWeight = FontWeight.Bold, fontSize = 11.sp,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Cores.Ambar.copy(alpha = 0.18f))
-                            .border(1.dp, Cores.Ambar.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
-                            .padding(horizontal = 6.dp, vertical = 1.dp)
-                    )
-                    Spacer(Modifier.width(6.dp))
-                }
                 // Chassi completo: na lista aparece só o final a partir de "VB" (ex.: VB003682).
                 val curto = vinCurto(r.vin)
                 Text(curto, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 15.sp,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            if (r.etiquetasVisiveis.isNotEmpty()) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    r.etiquetasVisiveis.forEach { et -> EtiquetaPequena(et) }
+                }
             }
             if (vezes > 1) {
                 Text("VIN repetido • aparece ${vezes}x", color = Cores.Vermelho,
@@ -1670,7 +1766,9 @@ private fun FolhaVeiculo(
     var responsavel by remember { mutableStateOf(inicial?.responsavel ?: r0?.responsavel ?: "") }
     var motivo by remember { mutableStateOf(inicial?.motivo ?: r0?.motivo ?: "") }
     var observacao by remember { mutableStateOf(inicial?.observacao ?: r0?.observacao ?: "") }
-    var okA by remember { mutableStateOf(inicial?.okA ?: r0?.okA ?: false) }
+    val etiquetas = remember {
+        mutableStateListOf<Etiqueta>().apply { addAll(inicial?.etiquetas ?: r0?.etiquetas ?: emptyList()) }
+    }
     val fotos = remember {
         mutableStateListOf<String>().apply { addAll(inicial?.fotos ?: r0?.fotos ?: emptyList()) }
     }
@@ -1729,10 +1827,10 @@ private fun FolhaVeiculo(
     fun rascunhoAtual(): Rascunho? {
         val vazio = vin.isBlank() && modelo == null && cor == null && status == null &&
             reparo.isBlank() && responsavel.isBlank() && fotos.isEmpty() && intervalo == AUTOMATICO &&
-            motivo.isBlank() && observacao.isBlank() && !okA
+            motivo.isBlank() && observacao.isBlank() && etiquetas.isEmpty()
         return if (vazio) null else Rascunho(
             usarPrefixo, vin, modelo, cor, status, reparo, responsavel, fotos.toList(), intervalo,
-            motivo, observacao, okA
+            motivo, observacao, etiquetas.toList()
         )
     }
 
@@ -1741,7 +1839,7 @@ private fun FolhaVeiculo(
         Fotos.apagar(fotos.toList())
         fotos.clear()
         usarPrefixo = true; vin = ""; modelo = null; cor = null; status = null
-        reparo = ""; responsavel = ""; intervalo = AUTOMATICO; motivo = ""; observacao = ""; okA = false
+        reparo = ""; responsavel = ""; intervalo = AUTOMATICO; motivo = ""; observacao = ""; etiquetas.clear()
         onRascunho(null)
     }
 
@@ -1793,7 +1891,7 @@ private fun FolhaVeiculo(
             fotos = if (st == Status.APROVADO) emptyList() else fotos.toList(),
             motivo = if (ehBloqueioOuSeparado) motivo.trim().ifEmpty { null } else null,
             observacao = if (ehBloqueioOuSeparado) observacao.trim().ifEmpty { null } else null,
-            okA = okA && (st == null || st == Status.APROVADO || st == Status.REPARO)
+            etiquetas = etiquetas.filter { it.permitida(st) }
         )
     }
 
@@ -1958,28 +2056,38 @@ private fun FolhaVeiculo(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
-                if (status == null || status == Status.APROVADO || status == Status.REPARO) {
+                val disponiveis = Etiqueta.entries.filter { it.permitida(status) }
+                if (disponiveis.isNotEmpty()) {
                     Spacer(Modifier.height(10.dp))
-                    FilterChip(
-                        selected = okA,
-                        onClick = { okA = !okA },
-                        label = { Text("OK A-", fontWeight = FontWeight.Bold) },
-                        leadingIcon = if (okA) {
-                            { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                        } else null,
-                        shape = RoundedCornerShape(10.dp),
-                        colors = FilterChipDefaults.filterChipColors(
-                            containerColor = Cores.SuperficieAlta,
-                            labelColor = Cores.TextoSuave,
-                            selectedContainerColor = Cores.Ambar.copy(alpha = 0.2f),
-                            selectedLabelColor = Cores.Ambar,
-                            selectedLeadingIconColor = Cores.Ambar
-                        ),
-                        border = FilterChipDefaults.filterChipBorder(
-                            enabled = true, selected = okA,
-                            borderColor = Cores.Borda, selectedBorderColor = Cores.Ambar
-                        )
-                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        disponiveis.forEach { et ->
+                            val marcado = et in etiquetas
+                            val cor = corEtiqueta(et)
+                            FilterChip(
+                                selected = marcado,
+                                onClick = { if (marcado) etiquetas.remove(et) else etiquetas.add(et) },
+                                label = { Text(et.texto, fontWeight = FontWeight.Bold) },
+                                leadingIcon = if (marcado) {
+                                    { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                } else null,
+                                shape = RoundedCornerShape(10.dp),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    containerColor = Cores.SuperficieAlta,
+                                    labelColor = Cores.TextoSuave,
+                                    selectedContainerColor = cor.copy(alpha = 0.2f),
+                                    selectedLabelColor = cor,
+                                    selectedLeadingIconColor = cor
+                                ),
+                                border = FilterChipDefaults.filterChipBorder(
+                                    enabled = true, selected = marcado,
+                                    borderColor = Cores.Borda, selectedBorderColor = cor
+                                )
+                            )
+                        }
+                    }
                 }
                 if (status == null) {
                     Spacer(Modifier.height(12.dp))

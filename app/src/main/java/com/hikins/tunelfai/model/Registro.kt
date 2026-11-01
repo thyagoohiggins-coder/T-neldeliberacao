@@ -8,6 +8,23 @@ enum class Status(val texto: String) {
     SEPARADO("Separado")      // não entra nas estatísticas
 }
 
+/**
+ * Etiquetas de identificação do veículo.
+ * [obsReparo]: no Reparo, entra automaticamente como "Obs" na mensagem de veículo negado.
+ */
+enum class Etiqueta(val texto: String, val obsReparo: Boolean) {
+    OK_A("OK A-", true),
+    LIB_SISTEMA("Lib. no sistema", false),
+    RETORNO_PDI("Retorno de PDI", true),
+    PRIORIDADE_PDI("Prioridade PDI", true);
+
+    /** Status em que a etiqueta pode ser usada. */
+    fun permitida(status: Status?): Boolean = when (this) {
+        LIB_SISTEMA -> status == Status.APROVADO
+        else -> status == null || status == Status.APROVADO || status == Status.REPARO
+    }
+}
+
 /** VIN a partir do código de barras do chassi. */
 object Vin {
     /** Usa tudo o que foi lido no código, só em maiúsculas e sem espaços/símbolos. */
@@ -73,8 +90,11 @@ data class Registro(
     val fotos: List<String> = emptyList(),    // fotos do demérito (Reparo, Bloqueado ou Separado)
     val motivo: String? = null,               // motivo (só Bloqueado/Separado)
     val observacao: String? = null,           // observação (só Bloqueado/Separado)
-    val okA: Boolean = false                  // etiqueta "OK A-" (Inspeção 360, Aprovado ou Reparo)
+    val etiquetas: List<Etiqueta> = emptyList()   // etiquetas (OK A-, Lib. no sistema, PDI...)
 ) {
+    /** Etiquetas que valem para o status atual. */
+    val etiquetasVisiveis: List<Etiqueta> get() = etiquetas.filter { it.permitida(status) }
+
     /** Só entra na Produção quem é Aprovado ou Reparo (Inspeção, Bloqueado e Separado não contam). */
     val contabiliza: Boolean get() = status == Status.APROVADO || status == Status.REPARO
 

@@ -153,7 +153,7 @@ private data class Rascunho(
     val etiquetas: List<Etiqueta> = emptyList()
 )
 private const val PREFIXO_VIN = "VB"
-private const val MAX_FOTOS = 4
+private const val MAX_FOTOS = 7
 private val RESPONSAVEIS = listOf("Trim Shop", "Body Shop", "Small", "Fai", "Paint", "CKD", "Logística", "Qualidade")
 
 /** "06:00" -> "06:00 – 07:00" (versão de tela; a mensagem usa Formatador.faixa). */

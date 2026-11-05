@@ -2185,8 +2185,9 @@ private fun FolhaVeiculo(
                                 onClick = {
                                     if (marcado) etiquetas.remove(et) else {
                                         etiquetas.add(et)
-                                        // "Liberado PDI" marca junto o "Retorno de PDI".
-                                        if (et == Etiqueta.LIBERADO_PDI && Etiqueta.RETORNO_PDI !in etiquetas &&
+                                        // "Liberado PDI" e "Prioridade PDI" marcam junto o "Retorno de PDI".
+                                        if ((et == Etiqueta.LIBERADO_PDI || et == Etiqueta.PRIORIDADE_PDI) &&
+                                            Etiqueta.RETORNO_PDI !in etiquetas &&
                                             Etiqueta.RETORNO_PDI.permitida(status)
                                         ) etiquetas.add(Etiqueta.RETORNO_PDI)
                                     }

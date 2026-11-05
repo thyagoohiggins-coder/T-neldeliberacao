@@ -93,6 +93,16 @@ class Configuracoes(context: Context) {
         get() = prefs.getString("aviso_fechamento_dia", "") ?: ""
         set(v) = prefs.edit().putString("aviso_fechamento_dia", v).apply()
 
+    /** Formulário de veículo em andamento (JSON), para não perder nada se o Android fechar o app. */
+    var formSalvo: String
+        get() = prefs.getString("form_salvo", "") ?: ""
+        set(v) = prefs.edit().putString("form_salvo", v).commit().let { }
+
+    /** Foto que estava sendo tirada pela câmera (caminho), para recuperar se o app for fechado. */
+    var fotoPendente: String
+        get() = prefs.getString("foto_pendente", "") ?: ""
+        set(v) = prefs.edit().putString("foto_pendente", v).commit().let { }
+
     /** Banco de reparos pré-definidos, sugeridos ao escrever o reparo de um veículo. */
     var reparos: List<String>
         get() {

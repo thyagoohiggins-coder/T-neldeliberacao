@@ -34,14 +34,24 @@ object Vin {
 /** Modelos e cores disponíveis (opcionais, só para identificar o carro no app). */
 enum class Marca { CHERY, CHANGAN }
 
-/** Modelo: código interno, nome (vai na mensagem), prefixo do chassi e marca. */
-data class Modelo(val codigo: String, val nome: String, val prefixo: String, val marca: Marca)
+/**
+ * Modelo: código interno, nome (vai na mensagem), prefixo do chassi e marca.
+ * [prefixoAtivo] = false: o prefixo fica guardado (rascunho) mas não é usado para detectar o modelo.
+ */
+data class Modelo(
+    val codigo: String,
+    val nome: String,
+    val prefixo: String,
+    val marca: Marca,
+    val prefixoAtivo: Boolean = true
+)
 
 object Catalogo {
     val modelos = listOf(
-        Modelo("S202", "Uni-T", "95PLDL61DVB", Marca.CHANGAN),
-        Modelo("C655", "CS55", "95PJCL61DVB", Marca.CHANGAN),
-        Modelo("C928", "CS75", "95PKDM81DVB", Marca.CHANGAN),
+        // Changan: prefixos desativados por enquanto (o processo mudou e eles serão alterados).
+        Modelo("S202", "Uni-T", "95PLDL61DVB", Marca.CHANGAN, prefixoAtivo = false),
+        Modelo("C655", "CS55", "95PJCL61DVB", Marca.CHANGAN, prefixoAtivo = false),
+        Modelo("C928", "CS75", "95PKDM81DVB", Marca.CHANGAN, prefixoAtivo = false),
         Modelo("T1E ADAS", "Tiggo 7 Adas", "95PEEL61DVB", Marca.CHERY),
         Modelo("T1E ICE LOW", "Tiggo 7 Ice Low", "95PEFL31DVB", Marca.CHERY),
         Modelo("T19 ICE LOW", "Tiggo 5 Ice Low", "95PBFK31DVB", Marca.CHERY),
@@ -60,7 +70,7 @@ object Catalogo {
     fun detectar(vin: String): Modelo? {
         val v = Vin.limpar(vin)
         if (v.length < TAMANHO_CHAVE) return null
-        return modelos.firstOrNull { v.startsWith(it.prefixo.take(TAMANHO_CHAVE)) }
+        return modelos.firstOrNull { it.prefixoAtivo && v.startsWith(it.prefixo.take(TAMANHO_CHAVE)) }
     }
 
     /** Marca pelo nome do modelo escolhido ou, se não houver, pelo prefixo do VIN. */

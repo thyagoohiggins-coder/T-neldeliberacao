@@ -98,6 +98,10 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -136,6 +140,55 @@ import kotlinx.coroutines.launch
 import java.util.Calendar
 
 private const val AUTOMATICO = "Auto"
+
+/** Formulário salvo em disco: novo veículo ou edição (pela ordem), se estava aberto e os campos. */
+private data class FormSalvo(val novo: Boolean, val ordem: Long, val aberto: Boolean, val rascunho: Rascunho?)
+
+private object FormDisco {
+    fun paraTexto(f: FormSalvo): String {
+        val o = org.json.JSONObject()
+            .put("novo", f.novo).put("ordem", f.ordem).put("aberto", f.aberto)
+        f.rascunho?.let { r ->
+            o.put("r", org.json.JSONObject()
+                .put("usarPrefixo", r.usarPrefixo).put("vin", r.vin)
+                .put("modelo", r.modelo ?: "").put("cor", r.cor ?: "")
+                .put("status", r.status?.name ?: "").put("reparo", r.reparo)
+                .put("responsavel", r.responsavel).put("intervalo", r.intervalo)
+                .put("motivo", r.motivo).put("observacao", r.observacao)
+                .put("fotos", org.json.JSONArray(r.fotos))
+                .put("etiquetas", org.json.JSONArray(r.etiquetas.map { it.name })))
+        }
+        return o.toString()
+    }
+
+    fun deTexto(texto: String): FormSalvo? = try {
+        if (texto.isBlank()) null else {
+            val o = org.json.JSONObject(texto)
+            val r = o.optJSONObject("r")?.let { j ->
+                fun lista(nome: String): List<String> =
+                    j.optJSONArray(nome)?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList()
+                Rascunho(
+                    usarPrefixo = j.optBoolean("usarPrefixo", true),
+                    vin = j.optString("vin", ""),
+                    modelo = j.optString("modelo", "").ifEmpty { null },
+                    cor = j.optString("cor", "").ifEmpty { null },
+                    status = Status.entries.firstOrNull { it.name == j.optString("status", "") },
+                    reparo = j.optString("reparo", ""),
+                    responsavel = j.optString("responsavel", ""),
+                    // Só as fotos que ainda existem no aparelho.
+                    fotos = lista("fotos").filter { File(it).exists() },
+                    intervalo = j.optString("intervalo", AUTOMATICO),
+                    motivo = j.optString("motivo", ""),
+                    observacao = j.optString("observacao", ""),
+                    etiquetas = lista("etiquetas").mapNotNull { n -> Etiqueta.entries.firstOrNull { it.name == n } }
+                )
+            }
+            FormSalvo(o.optBoolean("novo", true), o.optLong("ordem", 0), o.optBoolean("aberto", false), r)
+        }
+    } catch (e: Exception) {
+        null
+    }
+}
 
 /** Campos de um "Novo veículo" fechado sem salvar (voltam ao abrir o formulário de novo). */
 private data class Rascunho(
@@ -222,6 +275,7 @@ fun TunelApp() {
     var novoAberto by remember { mutableStateOf(false) }
     var rascunho by remember { mutableStateOf<Rascunho?>(null) }
     var editando by remember { mutableStateOf<Registro?>(null) }
+    var rascunhoEdicao by remember { mutableStateOf<Rascunho?>(null) }
     // Seleção múltipla (pela "ordem" de cada registro) para mover/excluir em grupo.
     val selecionados = remember { mutableStateListOf<Long>() }
     var escolherDestino by remember { mutableStateOf(false) }
@@ -284,6 +338,18 @@ fun TunelApp() {
         registros.addAll(e.registros)
         seq = e.seq
         carregado = true
+        // Formulário que estava aberto quando o Android fechou o app: reabre do jeito que estava.
+        FormDisco.deTexto(config.formSalvo)?.let { f ->
+            if (f.novo) {
+                rascunho = f.rascunho
+                if (f.aberto) novoAberto = true
+            } else if (f.aberto) {
+                registros.firstOrNull { it.ordem == f.ordem }?.let { reg ->
+                    rascunhoEdicao = f.rascunho
+                    editando = reg
+                }
+            }
+        }
         // Notificações de lembrete foram removidas: desliga e cancela as agendadas.
         if (config.lembretes) { config.lembretes = false; lembretes = false }
         Lembretes.atualizar(context)
@@ -523,17 +589,29 @@ fun TunelApp() {
         }
     }
 
+    /** Fecha o formulário salvo em disco (mantém só o rascunho do novo veículo, se houver). */
+    fun encerrarFormDisco() {
+        config.formSalvo = rascunho?.let { FormDisco.paraTexto(FormSalvo(true, 0, false, it)) } ?: ""
+    }
+
     if (novoAberto) {
         FolhaVeiculo(
             inicial = null,
             adiantar = adiantar,
             bancoReparos = bancoReparos,
             rascunho = rascunho,
-            onRascunho = { rascunho = it },
+            onRascunho = {
+                rascunho = it
+                config.formSalvo = it?.let { r -> FormDisco.paraTexto(FormSalvo(true, 0, false, r)) } ?: ""
+            },
+            onAlterado = { r ->
+                config.formSalvo = FormDisco.paraTexto(FormSalvo(true, 0, true, r))
+            },
             vinsExistentes = registros.associate { chaveVin(it.vin) to it.intervalo },
             onFechar = { novoAberto = false },
             onSalvar = { r ->
                 rascunho = null
+                config.formSalvo = ""
                 seq += 1
                 registros.add(r.copy(ordem = seq))
                 persistir()
@@ -551,19 +629,23 @@ fun TunelApp() {
             bancoReparos = bancoReparos,
             vinsExistentes = registros.filter { it.ordem != atual.ordem }
                 .associate { chaveVin(it.vin) to it.intervalo },
-            onFechar = { editando = null },
+            rascunho = rascunhoEdicao,
+            onAlterado = { r ->
+                config.formSalvo = FormDisco.paraTexto(FormSalvo(false, atual.ordem, true, r))
+            },
+            onFechar = { editando = null; rascunhoEdicao = null; encerrarFormDisco() },
             onSalvar = { novo ->
                 val i = registros.indexOfFirst { it.ordem == atual.ordem }
                 if (i >= 0) registros[i] = novo.copy(ordem = atual.ordem)
                 persistir()
-                editando = null
+                editando = null; rascunhoEdicao = null; encerrarFormDisco()
             },
             onExcluir = {
                 Fotos.apagar(atual.fotos)
                 registros.removeAll { it.ordem == atual.ordem }
                 selecionados.remove(atual.ordem)
                 persistir()
-                editando = null
+                editando = null; rascunhoEdicao = null; encerrarFormDisco()
             }
         )
     }
@@ -1655,15 +1737,18 @@ private fun LinhaVeiculo(
 
 @Composable
 private fun MiniaturaFoto(caminho: String, onRemover: () -> Unit) {
-    val bmp = remember(caminho) { Fotos.miniatura(caminho) }
+    // Decodifica a miniatura fora da thread principal (várias fotos grandes travavam/fechavam o app).
+    val bmp by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, caminho) {
+        value = withContext(Dispatchers.IO) { Fotos.miniatura(caminho) }
+    }
     Box(
         Modifier
             .size(84.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(Cores.SuperficieAlta)
     ) {
-        if (bmp != null) {
-            Image(bmp, contentDescription = "Foto do demérito", contentScale = ContentScale.Crop,
+        bmp?.let { imagem ->
+            Image(imagem, contentDescription = "Foto do demérito", contentScale = ContentScale.Crop,
                 modifier = Modifier.matchParentSize())
         }
         Box(
@@ -1716,24 +1801,25 @@ private fun FolhaVeiculo(
     onExcluir: (() -> Unit)? = null,
     rascunho: Rascunho? = null,
     onRascunho: (Rascunho?) -> Unit = {},
-    vinsExistentes: Map<String, String> = emptyMap()
+    vinsExistentes: Map<String, String> = emptyMap(),
+    onAlterado: (Rascunho?) -> Unit = {}
 ) {
     val context = LocalContext.current
-    // Novo veículo fechado sem salvar: os campos voltam do rascunho.
-    val r0 = if (inicial == null) rascunho else null
+    // Rascunho: novo veículo fechado sem salvar, ou formulário restaurado depois que o Android fechou o app.
+    val r0 = rascunho
     // Todo VIN começa com "VB": o prefixo já vem escrito e o usuário digita só o resto.
     // Lido pelo código de barras: o prefixo some e o VIN fica exatamente como o código.
     var usarPrefixo by remember {
-        mutableStateOf(inicial?.vin?.startsWith(PREFIXO_VIN) ?: r0?.usarPrefixo ?: true)
+        mutableStateOf(r0?.usarPrefixo ?: inicial?.vin?.startsWith(PREFIXO_VIN) ?: true)
     }
     var vin by remember {
-        mutableStateOf(inicial?.vin?.let { if (usarPrefixo) it.removePrefix(PREFIXO_VIN) else it } ?: r0?.vin ?: "")
+        mutableStateOf(r0?.vin ?: inicial?.vin?.let { if (usarPrefixo) it.removePrefix(PREFIXO_VIN) else it } ?: "")
     }
-    var modelo by remember { mutableStateOf(inicial?.modelo ?: r0?.modelo) }
-    var cor by remember { mutableStateOf(inicial?.cor ?: r0?.cor) }
-    var status by remember { mutableStateOf(inicial?.status ?: r0?.status) }
-    var reparo by remember { mutableStateOf(inicial?.reparo ?: r0?.reparo ?: "") }
-    var intervalo by remember { mutableStateOf(inicial?.intervalo ?: r0?.intervalo ?: AUTOMATICO) }
+    var modelo by remember { mutableStateOf(if (r0 != null) r0.modelo else inicial?.modelo) }
+    var cor by remember { mutableStateOf(if (r0 != null) r0.cor else inicial?.cor) }
+    var status by remember { mutableStateOf(if (r0 != null) r0.status else inicial?.status) }
+    var reparo by remember { mutableStateOf(r0?.reparo ?: inicial?.reparo ?: "") }
+    var intervalo by remember { mutableStateOf(r0?.intervalo ?: inicial?.intervalo ?: AUTOMATICO) }
     var confirmarExcluir by remember { mutableStateOf(false) }
     var abrirScanner by remember { mutableStateOf(false) }
     // Intervalo onde este VIN já existe (null se não é repetido). Atualiza enquanto digita.
@@ -1763,30 +1849,51 @@ private fun FolhaVeiculo(
             modeloAuto = false
         }
     }
-    var responsavel by remember { mutableStateOf(inicial?.responsavel ?: r0?.responsavel ?: "") }
-    var motivo by remember { mutableStateOf(inicial?.motivo ?: r0?.motivo ?: "") }
-    var observacao by remember { mutableStateOf(inicial?.observacao ?: r0?.observacao ?: "") }
+    var responsavel by remember { mutableStateOf(r0?.responsavel ?: inicial?.responsavel ?: "") }
+    var motivo by remember { mutableStateOf(r0?.motivo ?: inicial?.motivo ?: "") }
+    var observacao by remember { mutableStateOf(r0?.observacao ?: inicial?.observacao ?: "") }
     val etiquetas = remember {
-        mutableStateListOf<Etiqueta>().apply { addAll(inicial?.etiquetas ?: r0?.etiquetas ?: emptyList()) }
+        mutableStateListOf<Etiqueta>().apply { addAll(r0?.etiquetas ?: inicial?.etiquetas ?: emptyList()) }
     }
     val fotos = remember {
-        mutableStateListOf<String>().apply { addAll(inicial?.fotos ?: r0?.fotos ?: emptyList()) }
+        mutableStateListOf<String>().apply { addAll(r0?.fotos ?: inicial?.fotos ?: emptyList()) }
     }
     val fotosOriginais = remember { inicial?.fotos ?: emptyList() }
     var fotoPendente by remember { mutableStateOf<File?>(null) }
 
+    val configForm = remember { Configuracoes(context) }
     val tirarFoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
-        val f = fotoPendente
+        // Se o Android fechou o app durante a câmera, o caminho vem do que foi salvo antes de abrir.
+        val f = fotoPendente ?: configForm.fotoPendente.takeIf { it.isNotEmpty() }?.let { File(it) }
         if (f != null) {
-            if (ok && f.exists() && f.length() > 0) fotos.add(f.absolutePath) else f.delete()
+            if (ok && f.exists() && f.length() > 0) {
+                if (f.absolutePath !in fotos) fotos.add(f.absolutePath)
+            } else f.delete()
         }
         fotoPendente = null
+        configForm.fotoPendente = ""
+    }
+    // App reaberto depois de ser fechado com a câmera aberta: recupera a foto que chegou a ser salva.
+    LaunchedEffect(Unit) {
+        val pendente = configForm.fotoPendente
+        if (pendente.isNotEmpty()) {
+            val f = File(pendente)
+            if (f.exists() && f.length() > 0 && pendente !in fotos) fotos.add(pendente)
+            configForm.fotoPendente = ""
+        }
     }
     // Inspeção 360: só 1 foto (capa da checklist). Reparo/Bloqueado/Separado: até MAX_FOTOS.
     val limiteFotos = if (status == null) 1 else MAX_FOTOS
+    val escopo = rememberCoroutineScope()
     val escolherFotos = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
-        uris.take((limiteFotos - fotos.size).coerceAtLeast(0))
-            .forEach { u -> Fotos.copiarDaGaleria(context, u)?.let { fotos.add(it) } }
+        val escolhidas = uris.take((limiteFotos - fotos.size).coerceAtLeast(0))
+        // Copia em segundo plano: fotos grandes copiadas na thread principal travavam o app.
+        escopo.launch {
+            val copiadas = withContext(Dispatchers.IO) {
+                escolhidas.mapNotNull { u -> Fotos.copiarDaGaleria(context, u) }
+            }
+            copiadas.forEach { if (fotos.size < limiteFotos) fotos.add(it) }
+        }
     }
 
     /** Miniaturas + botões de câmera/galeria até [limite] fotos. */
@@ -1814,6 +1921,7 @@ private fun FolhaVeiculo(
                 BotaoFoto(Icons.Filled.PhotoCamera, "Câmera") {
                     val f = Fotos.novoArquivo(context)
                     fotoPendente = f
+                    configForm.fotoPendente = f.absolutePath
                     tirarFoto.launch(Fotos.uriDe(context, f))
                 }
                 BotaoFoto(Icons.Filled.AddPhotoAlternate, "Galeria") {
@@ -1832,6 +1940,11 @@ private fun FolhaVeiculo(
             usarPrefixo, vin, modelo, cor, status, reparo, responsavel, fotos.toList(), intervalo,
             motivo, observacao, etiquetas.toList()
         )
+    }
+
+    // Salva o formulário no armazenamento a cada mudança (se o Android fechar o app, nada se perde).
+    LaunchedEffect(Unit) {
+        snapshotFlow { rascunhoAtual() }.collect { onAlterado(it) }
     }
 
     /** Limpa o formulário de novo veículo (e apaga as fotos já tiradas nele). */

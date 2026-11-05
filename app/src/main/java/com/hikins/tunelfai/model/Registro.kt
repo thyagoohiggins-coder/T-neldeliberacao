@@ -16,7 +16,8 @@ enum class Etiqueta(val texto: String, val obsReparo: Boolean) {
     OK_A("OK A-", true),
     LIB_SISTEMA("Lib. no sistema", false),
     RETORNO_PDI("Retorno de PDI", true),
-    PRIORIDADE_PDI("Prioridade PDI", true);
+    PRIORIDADE_PDI("Prioridade PDI", true),
+    LIBERADO_PDI("Liberado PDI", true);   // ao marcar, marca junto "Retorno de PDI"
 
     /** Status em que a etiqueta pode ser usada. */
     fun permitida(status: Status?): Boolean = when (this) {

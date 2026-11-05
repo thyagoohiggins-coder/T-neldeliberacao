@@ -1379,6 +1379,7 @@ private fun corEtiqueta(et: Etiqueta): Color = when (et) {
     Etiqueta.LIB_SISTEMA -> Cores.Verde
     Etiqueta.RETORNO_PDI -> Cores.Azul
     Etiqueta.PRIORIDADE_PDI -> Color(0xFFE879F9)
+    Etiqueta.LIBERADO_PDI -> Color(0xFF2DD4BF)
 }
 
 @Composable
@@ -2181,7 +2182,15 @@ private fun FolhaVeiculo(
                             val cor = corEtiqueta(et)
                             FilterChip(
                                 selected = marcado,
-                                onClick = { if (marcado) etiquetas.remove(et) else etiquetas.add(et) },
+                                onClick = {
+                                    if (marcado) etiquetas.remove(et) else {
+                                        etiquetas.add(et)
+                                        // "Liberado PDI" marca junto o "Retorno de PDI".
+                                        if (et == Etiqueta.LIBERADO_PDI && Etiqueta.RETORNO_PDI !in etiquetas &&
+                                            Etiqueta.RETORNO_PDI.permitida(status)
+                                        ) etiquetas.add(Etiqueta.RETORNO_PDI)
+                                    }
+                                },
                                 label = { Text(et.texto, fontWeight = FontWeight.Bold) },
                                 leadingIcon = if (marcado) {
                                     { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }

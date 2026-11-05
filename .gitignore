@@ -13,6 +13,8 @@ captures/
 *.keystore
 *.jks
 release.keystore
+# Exceção: chave fixa de assinatura do app (para atualizar instalando por cima).
+!app/assinatura/tunelfai.jks
 
 # Sistema
 .DS_Store

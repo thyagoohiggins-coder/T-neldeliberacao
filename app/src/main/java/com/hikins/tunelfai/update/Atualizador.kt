@@ -36,9 +36,66 @@ object Atualizador {
         "0"
     }
 
-    /** Consulta a última release. Retorna null em caso de erro de rede. */
+    const val PAGINA_VERSOES =
+        "https://github.com/thyagoohiggins-coder/T-neldeliberacao/releases/latest"
+    private const val PAGINA_LATEST =
+        "https://github.com/thyagoohiggins-coder/T-neldeliberacao/releases/latest"
+    private const val BASE_DOWNLOAD =
+        "https://github.com/thyagoohiggins-coder/T-neldeliberacao/releases/download"
+
+    /**
+     * Consulta a última release. Tenta a API do GitHub e, se falhar (ex.: limite de 60
+     * consultas/hora por IP na rede da operadora), usa o redirecionamento da página "latest".
+     * Retorna null só se as duas falharem.
+     */
     suspend fun verificar(context: Context): InfoAtualizacao? = withContext(Dispatchers.IO) {
-        try {
+        ultimoErro = null
+        viaApi(context) ?: viaRedirecionamento(context)
+    }
+
+    /** Motivo da última falha (para mostrar ao usuário e diagnosticar). */
+    var ultimoErro: String? = null
+        private set
+
+    private fun anotar(origem: String, motivo: String) {
+        ultimoErro = listOfNotNull(ultimoErro, "$origem: $motivo").joinToString("\n")
+    }
+
+    private fun descrever(e: Exception): String = "${e.javaClass.simpleName}: ${e.message.orEmpty()}"
+
+    /** Plano B: /releases/latest redireciona para .../tag/vX.Y; o APK tem nome fixo por versão. */
+    private fun viaRedirecionamento(context: Context): InfoAtualizacao? = try {
+        val conn = (URL(PAGINA_LATEST).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            instanceFollowRedirects = false
+            setRequestProperty("User-Agent", "TunelFAI-App")
+            connectTimeout = 15000
+            readTimeout = 15000
+        }
+        val codigo = conn.responseCode
+        val destino = conn.getHeaderField("Location").orEmpty()
+        conn.disconnect()
+        val tagCompleta = destino.substringAfterLast("/tag/", "")
+        if (tagCompleta.isBlank()) {
+            anotar("Página", "HTTP $codigo sem redirecionamento")
+            null
+        } else {
+            val tag = tagCompleta.removePrefix("v").trim()
+            val atual = versaoAtual(context)
+            InfoAtualizacao(
+                temNova = comparar(tag, atual) > 0,
+                versaoAtual = atual,
+                versaoNova = tag,
+                urlApk = "$BASE_DOWNLOAD/$tagCompleta/HoraAHora-TunelFAI-v$tag.apk"
+            )
+        }
+    } catch (e: Exception) {
+        anotar("Página", descrever(e))
+        null
+    }
+
+    private fun viaApi(context: Context): InfoAtualizacao? {
+        return try {
             val conn = (URL(API_LATEST).openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 setRequestProperty("Accept", "application/vnd.github+json")
@@ -46,7 +103,10 @@ object Atualizador {
                 connectTimeout = 15000
                 readTimeout = 15000
             }
-            if (conn.responseCode != 200) return@withContext null
+            if (conn.responseCode != 200) {
+                anotar("API", "HTTP ${conn.responseCode}")
+                return null
+            }
             val corpo = conn.inputStream.bufferedReader().use { it.readText() }
             val json = JSONObject(corpo)
 
@@ -70,6 +130,7 @@ object Atualizador {
                 urlApk = urlApk
             )
         } catch (e: Exception) {
+            anotar("API", descrever(e))
             null
         }
     }

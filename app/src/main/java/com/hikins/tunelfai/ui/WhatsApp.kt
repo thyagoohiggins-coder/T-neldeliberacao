@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import java.io.File
 
 /**
  * Abre o WhatsApp diretamente com a mensagem pronta para escolher o contato/grupo.
@@ -35,4 +36,33 @@ fun enviarWhatsApp(context: Context, texto: String) {
     } catch (e: Exception) {
         Toast.makeText(context, "WhatsApp não encontrado.", Toast.LENGTH_LONG).show()
     }
+}
+
+/**
+ * Envia texto + fotos para o WhatsApp (o texto vai como legenda).
+ * Sem fotos, cai no envio só de texto.
+ */
+fun enviarWhatsAppComFotos(context: Context, texto: String, caminhos: List<String>) {
+    val uris = caminhos.map { File(it) }.filter { it.exists() }.map { Fotos.uriDe(context, it) }
+    if (uris.isEmpty()) {
+        enviarWhatsApp(context, texto)
+        return
+    }
+    for (pacote in listOf("com.whatsapp", "com.whatsapp.w4b")) {
+        val i = if (uris.size == 1) {
+            Intent(Intent.ACTION_SEND).putExtra(Intent.EXTRA_STREAM, uris[0])
+        } else {
+            Intent(Intent.ACTION_SEND_MULTIPLE).putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
+        }.apply {
+            setPackage(pacote)
+            type = "image/*"
+            putExtra(Intent.EXTRA_TEXT, texto)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        if (i.resolveActivity(context.packageManager) != null) {
+            context.startActivity(i)
+            return
+        }
+    }
+    Toast.makeText(context, "WhatsApp não encontrado.", Toast.LENGTH_LONG).show()
 }

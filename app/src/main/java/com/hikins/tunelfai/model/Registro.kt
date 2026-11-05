@@ -15,9 +15,9 @@ enum class Status(val texto: String) {
 enum class Etiqueta(val texto: String, val obsReparo: Boolean) {
     OK_A("OK A-", true),
     LIB_SISTEMA("Lib. no sistema", false),
+    LIBERADO_PDI("Liberado PDI", true),   // ao marcar, marca junto "Retorno de PDI"
     RETORNO_PDI("Retorno de PDI", true),
-    PRIORIDADE_PDI("Prioridade PDI", true),
-    LIBERADO_PDI("Liberado PDI", true);   // ao marcar, marca junto "Retorno de PDI"
+    PRIORIDADE_PDI("Prioridade PDI", true);
 
     /** Status em que a etiqueta pode ser usada. */
     fun permitida(status: Status?): Boolean = when (this) {
@@ -103,8 +103,8 @@ data class Registro(
     val observacao: String? = null,           // observação (só Bloqueado/Separado)
     val etiquetas: List<Etiqueta> = emptyList()   // etiquetas (OK A-, Lib. no sistema, PDI...)
 ) {
-    /** Etiquetas que valem para o status atual. */
-    val etiquetasVisiveis: List<Etiqueta> get() = etiquetas.filter { it.permitida(status) }
+    /** Etiquetas que valem para o status atual, sempre na ordem fixa (ex.: Liberado PDI antes de Retorno de PDI). */
+    val etiquetasVisiveis: List<Etiqueta> get() = etiquetas.filter { it.permitida(status) }.sortedBy { it.ordinal }
 
     /** Só entra na Produção quem é Aprovado ou Reparo (Inspeção, Bloqueado e Separado não contam). */
     val contabiliza: Boolean get() = status == Status.APROVADO || status == Status.REPARO

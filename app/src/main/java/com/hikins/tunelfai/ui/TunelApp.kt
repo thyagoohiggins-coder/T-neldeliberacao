@@ -206,6 +206,8 @@ private data class Rascunho(
     val etiquetas: List<Etiqueta> = emptyList()
 )
 private const val PREFIXO_VIN = "VB"
+/** Variação do chassi novo da Changan (Uni-T, CS55, CS75): "WB" no lugar de "VB". */
+private const val PREFIXO_VIN_CHANGAN = "WB"
 private const val MAX_FOTOS = 7
 private val RESPONSAVEIS = listOf("Trim Shop", "Body Shop", "Small", "Fai", "Paint", "CKD", "Logística", "Qualidade")
 
@@ -232,11 +234,19 @@ private fun corStatus(status: Status?): Color = when (status) {
 /** Chave para comparar VINs (chassi completo e "VB..." curto batem entre si). */
 private fun chaveVin(vin: String): String = vinCurto(vin.trim().uppercase())
 
-/** "95PEFL31DVB006944" -> "VB006944"; VINs curtos (já "VB...") ficam como estão. */
+/** "95PEFL31DVB006944" -> "VB006944" ("...DWB..." -> "WB..."); VINs curtos ficam como estão. */
 private fun vinCurto(vin: String): String {
-    val i = vin.lastIndexOf(PREFIXO_VIN)
+    val i = maxOf(vin.lastIndexOf(PREFIXO_VIN), vin.lastIndexOf(PREFIXO_VIN_CHANGAN))
     return if (vin.length > 10 && i > 0) vin.substring(i) else vin
 }
+
+/** Termos da busca: vários VINs separados por vírgula. */
+private fun termosBusca(busca: String): List<String> =
+    busca.uppercase().split(',').map { it.trim() }.filter { it.isNotEmpty() }
+
+/** VIN aparece na busca (sem termos = mostra todos). */
+private fun casaBusca(vin: String, termos: List<String>): Boolean =
+    termos.isEmpty() || vin.uppercase().let { v -> termos.any { v.contains(it) } }
 
 /** Status que têm mensagem própria no WhatsApp (com responsável e fotos). */
 private val STATUS_COM_ENVIO = setOf(Status.REPARO, Status.BLOQUEADO, Status.SEPARADO)
@@ -371,12 +381,12 @@ fun TunelApp() {
 
     val emAndamento = intervaloEmAndamento(agora)
     val modoSelecao = selecionados.isNotEmpty()
-    val filtro = busca.trim().uppercase()
+    val filtro = termosBusca(busca)
     // Quantas vezes cada VIN aparece (para destacar os repetidos).
     val contagemVin = registros.groupingBy { it.vin.uppercase() }.eachCount()
     val qtdRepetidos = contagemVin.count { it.value > 1 }
     val intervalosPresentes = registros
-        .filter { filtro.isEmpty() || it.vin.uppercase().contains(filtro) }
+        .filter { casaBusca(it.vin, filtro) }
         .map { it.intervalo }.distinct().sortedDescending()
 
     fun alternar(id: Long) {
@@ -500,6 +510,10 @@ fun TunelApp() {
                             value = busca,
                             onValueChange = { busca = it.uppercase() },
                             placeholder = { Text("Buscar VIN") },
+                            supportingText = {
+                                Text("Para buscar mais de um VIN, separe por vírgula (ex.: VB006944, WB007163)",
+                                    color = Cores.TextoSuave.copy(alpha = 0.6f))
+                            },
                             leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                             trailingIcon = {
                                 if (busca.isNotEmpty()) {
@@ -560,7 +574,7 @@ fun TunelApp() {
                 item(key = "vazio") { EstadoVazio() }
             } else if (intervalosPresentes.isEmpty()) {
                 item(key = "sem-resultado") {
-                    Text("Nenhum VIN encontrado para \"$filtro\".", color = Cores.TextoSuave,
+                    Text("Nenhum VIN encontrado para \"${filtro.joinToString(", ")}\".", color = Cores.TextoSuave,
                         textAlign = TextAlign.Center,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1513,7 +1527,7 @@ private fun CardIntervalo(
     registros: List<Registro>,
     emAndamento: Boolean,
     selecionados: List<Long>,
-    filtro: String,
+    filtro: List<String>,
     contagemVin: Map<String, Int>,
     onToque: (Registro) -> Unit,
     onToqueLongo: (Registro) -> Unit,
@@ -1568,7 +1582,7 @@ private fun CardIntervalo(
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 doIntervalo.forEachIndexed { i, r ->
-                    if (filtro.isEmpty() || r.vin.uppercase().contains(filtro)) {
+                    if (casaBusca(r.vin, filtro)) {
                         LinhaVeiculo(
                             numero = i + 1,
                             r = r,
@@ -2040,8 +2054,9 @@ private fun FolhaVeiculo(
                 value = vin,
                 onValueChange = { novo ->
                     val t = novo.uppercase()
-                    // Chassi completo digitado (começa com 95P): tira o prefixo VB automático.
-                    if (usarPrefixo && t.startsWith("95P")) usarPrefixo = false
+                    // Chassi completo digitado (começa com 95P) ou Changan novo ("WB..."):
+                    // tira o prefixo VB automático e o VIN fica como foi digitado.
+                    if (usarPrefixo && (t.startsWith("95P") || t.startsWith("W"))) usarPrefixo = false
                     vin = t
                     detectarModelo()
                 },

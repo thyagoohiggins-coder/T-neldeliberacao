@@ -49,10 +49,10 @@ data class Modelo(
 
 object Catalogo {
     val modelos = listOf(
-        // Changan: prefixos desativados por enquanto (o processo mudou e eles serão alterados).
-        Modelo("S202", "Uni-T", "95PLDL61DVB", Marca.CHANGAN, prefixoAtivo = false),
-        Modelo("C655", "CS55", "95PJCL61DVB", Marca.CHANGAN, prefixoAtivo = false),
-        Modelo("C928", "CS75", "95PKDM81DVB", Marca.CHANGAN, prefixoAtivo = false),
+        // Changan: chassi novo com "WB" (ex.: 95PLDL61DWB007163); os demais modelos usam "VB".
+        Modelo("S202", "Uni-T", "95PLDL61DWB", Marca.CHANGAN),
+        Modelo("C655", "CS55", "95PJCL61DWB", Marca.CHANGAN),
+        Modelo("C928", "CS75", "95PKDM81DWB", Marca.CHANGAN),
         Modelo("T1E ADAS", "Tiggo 7 Adas", "95PEEL61DVB", Marca.CHERY),
         Modelo("T1E ICE LOW", "Tiggo 7 Ice Low", "95PEFL31DVB", Marca.CHERY),
         Modelo("T19 ICE LOW", "Tiggo 5 Ice Low", "95PBFK31DVB", Marca.CHERY),
@@ -65,13 +65,17 @@ object Catalogo {
     private const val TAMANHO_CHAVE = 8
 
     /**
-     * Modelo pelo prefixo do chassi (ex.: "95PLDL61DVB007163" -> Uni-T). Compara só os 8 primeiros
-     * caracteres: os seguintes (dígito, ano, fábrica) mudam de um carro/ano para outro.
+     * Modelo pelo prefixo do chassi (ex.: "95PLDL61DWB007163" -> Uni-T). Compara os 8 primeiros
+     * caracteres e, quando já digitados, também as letras das posições 10–11 ("VB"/"WB").
+     * A 9ª (dígito verificador) e o número de série mudam de um carro para outro.
      */
     fun detectar(vin: String): Modelo? {
         val v = Vin.limpar(vin)
         if (v.length < TAMANHO_CHAVE) return null
-        return modelos.firstOrNull { it.prefixoAtivo && v.startsWith(it.prefixo.take(TAMANHO_CHAVE)) }
+        return modelos.firstOrNull { m ->
+            m.prefixoAtivo && v.startsWith(m.prefixo.take(TAMANHO_CHAVE)) &&
+                (v.length < m.prefixo.length || v.substring(9, m.prefixo.length) == m.prefixo.substring(9))
+        }
     }
 
     /** Marca pelo nome do modelo escolhido ou, se não houver, pelo prefixo do VIN. */

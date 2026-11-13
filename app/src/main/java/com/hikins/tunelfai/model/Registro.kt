@@ -36,7 +36,8 @@ object Vin {
 enum class Marca { CHERY, CHANGAN }
 
 /**
- * Modelo: código interno, nome (vai na mensagem), prefixo do chassi e marca.
+ * Modelo: código interno, nome (vai na mensagem), prefixo(s) do chassi e marca.
+ * [prefixo] aceita mais de um prefixo separado por vírgula (ex.: "95PLDL61DVB, 95PLDL61DWB").
  * [prefixoAtivo] = false: o prefixo fica guardado (rascunho) mas não é usado para detectar o modelo.
  */
 data class Modelo(
@@ -45,14 +46,18 @@ data class Modelo(
     val prefixo: String,
     val marca: Marca,
     val prefixoAtivo: Boolean = true
-)
+) {
+    /** Prefixos separados (a vírgula divide um do outro). */
+    val prefixos: List<String> get() = prefixo.split(',').map { it.trim().uppercase() }.filter { it.isNotEmpty() }
+}
 
 object Catalogo {
     val modelos = listOf(
-        // Changan: chassi novo com "WB" (ex.: 95PLDL61DWB007163); os demais modelos usam "VB".
-        Modelo("S202", "Uni-T", "95PLDL61DWB", Marca.CHANGAN),
-        Modelo("C655", "CS55", "95PJCL61DWB", Marca.CHANGAN),
-        Modelo("C928", "CS75", "95PKDM81DWB", Marca.CHANGAN),
+        // Changan: aceita os dois chassis, "VB" e o novo "WB" (ex.: 95PLDL61DWB007163).
+        // Para dar mais de um prefixo a um modelo, separe por vírgula.
+        Modelo("S202", "Uni-T", "95PLDL61DVB, 95PLDL61DWB", Marca.CHANGAN),
+        Modelo("C655", "CS55", "95PJCL61DVB, 95PJCL61DWB", Marca.CHANGAN),
+        Modelo("C928", "CS75", "95PKDM81DVB, 95PKDM81DWB", Marca.CHANGAN),
         Modelo("T1E ADAS", "Tiggo 7 Adas", "95PEEL61DVB", Marca.CHERY),
         Modelo("T1E ICE LOW", "Tiggo 7 Ice Low", "95PEFL31DVB", Marca.CHERY),
         Modelo("T19 ICE LOW", "Tiggo 5 Ice Low", "95PBFK31DVB", Marca.CHERY),
@@ -72,10 +77,13 @@ object Catalogo {
     fun detectar(vin: String): Modelo? {
         val v = Vin.limpar(vin)
         if (v.length < TAMANHO_CHAVE) return null
-        return modelos.firstOrNull { m ->
-            m.prefixoAtivo && v.startsWith(m.prefixo.take(TAMANHO_CHAVE)) &&
-                (v.length < m.prefixo.length || v.substring(9, m.prefixo.length) == m.prefixo.substring(9))
-        }
+        return modelos.firstOrNull { m -> m.prefixoAtivo && m.prefixos.any { bate(v, it) } }
+    }
+
+    /** VIN bate com um prefixo: 8 primeiros caracteres e, se já digitadas, as posições 10–11. */
+    private fun bate(v: String, p: String): Boolean {
+        if (!v.startsWith(p.take(TAMANHO_CHAVE))) return false
+        return v.length < p.length || p.length <= 9 || v.substring(9, p.length) == p.substring(9)
     }
 
     /** Marca pelo nome do modelo escolhido ou, se não houver, pelo prefixo do VIN. */
